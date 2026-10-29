@@ -1,0 +1,56 @@
+# Laravel / PHP
+/vendor/
+/node_modules/
+/public/build
+/public/hot
+/public/storage
+/storage/*.key
+/storage/pail
+/.phpunit.cache
+.phpunit.result.cache
+.env
+.env.backup
+.env.production
+/.env.local
+/auth.json
+Homestead.json
+Homestead.yaml
+npm-debug.log
+yarn-error.log
+composer.phar
+
+# NOTE: composer.lock is committed on purpose (this is an application, not a library).
+# storage/framework/* and storage/logs are handled by the nested .gitignore files Laravel
+# ships inside storage/ — do not ignore those directories here, or fresh clones break.
+
+# Editors / OS
+/.idea
+/.vscode
+/.vs
+/.fleet
+/.nova
+/.zed
+.phpactor.json
+.DS_Store
+Thumbs.db
+
+# Docker local overrides
+docker-compose.override.yml
+
+# Secrets / local
+*.key
+*.pem
+
+# Horizon / queue
+/storage/horizon/
+
+# PHPUnit coverage
+coverage.xml
+.coverage/
+
+# Fly.io
+fly.toml.local
+
+# Private planning docs — kept locally, never pushed to the public repo
+/PROJECT-BRIEF.md
+/SETUP-INSTRUCTIONS.md
