@@ -98,4 +98,50 @@ class WooCommandsTest extends TestCase
 
         Http::assertNothingSent();
     }
+
+    public function test_webhooks_command_generates_secret_in_env_and_creates_webhook(): void
+    {
+        $dir = sys_get_temp_dir().'/vc-env-'.uniqid();
+        mkdir($dir);
+        file_put_contents($dir.'/.env', "APP_NAME=Test\n   WOO_WEBHOOK_SECRET=\n");
+        $this->app->useEnvironmentPath($dir);
+        config(['services.woocommerce.webhook_secret' => null, 'app.url' => 'http://localhost:8000']);
+
+        Http::fake(fn (Request $r) => $r->method() === 'GET'
+            ? Http::response([])                                  // no webhooks yet
+            : Http::response(['id' => 7, 'status' => 'active']));
+
+        $this->artisan('woo:webhooks')
+            ->expectsOutputToContain('Generated WOO_WEBHOOK_SECRET')
+            ->expectsOutputToContain('http://127.0.0.1:8000/webhooks/woocommerce')
+            ->assertSuccessful();
+
+        preg_match('/^WOO_WEBHOOK_SECRET=(\S+)$/m', file_get_contents($dir.'/.env'), $m);
+        $this->assertSame(48, strlen($m[1] ?? ''), '.env should contain the generated secret on its own line');
+        $this->assertSame(1, substr_count(file_get_contents($dir.'/.env'), 'WOO_WEBHOOK_SECRET='));
+
+        Http::assertSent(fn (Request $r) => $r->method() === 'POST'
+            && $r['topic'] === 'order.created'
+            && $r['delivery_url'] === 'http://127.0.0.1:8000/webhooks/woocommerce'
+            && $r['secret'] === $m[1]);
+    }
+
+    public function test_webhooks_command_updates_an_existing_webhook_instead_of_duplicating(): void
+    {
+        config(['services.woocommerce.webhook_secret' => 'existing-secret']);
+        Http::fake([
+            '*/webhooks/3*' => Http::response(['id' => 3, 'status' => 'active']),
+            '*/webhooks*' => Http::response([[
+                'id' => 3, 'topic' => 'order.created', 'status' => 'disabled',
+                'delivery_url' => 'http://127.0.0.1:8000/webhooks/woocommerce',
+            ]]),
+        ]);
+
+        $this->artisan('woo:webhooks', ['--url' => 'http://127.0.0.1:8000/webhooks/woocommerce'])
+            ->expectsOutputToContain('updated')
+            ->assertSuccessful();
+
+        Http::assertSent(fn (Request $r) => $r->method() === 'PUT' && $r['status'] === 'active' && $r['secret'] === 'existing-secret');
+        Http::assertNotSent(fn (Request $r) => $r->method() === 'POST');
+    }
 }

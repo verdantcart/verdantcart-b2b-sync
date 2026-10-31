@@ -1,0 +1,63 @@
+{
+  "id": 727,
+  "parent_id": 0,
+  "status": "processing",
+  "currency": "SEK",
+  "version": "10.3.0",
+  "prices_include_tax": false,
+  "date_created": "2026-10-31T16:12:05",
+  "date_created_gmt": "2026-10-31T15:12:05",
+  "discount_total": "0.00",
+  "shipping_total": "0.00",
+  "total_tax": "1242.50",
+  "total": "6212.50",
+  "customer_id": 3,
+  "order_key": "wc_order_Xk3mPq7RzT1aB",
+  "billing": {
+    "first_name": "Inköp",
+    "last_name": "Lundberg Café & Deli AB",
+    "company": "Lundberg Café & Deli AB",
+    "address_1": "Stortorget 4",
+    "city": "Lund",
+    "postcode": "222 23",
+    "country": "SE",
+    "email": "inkop@mraz.se",
+    "phone": "+46 46 123 45 67"
+  },
+  "shipping": {
+    "first_name": "Inköp",
+    "last_name": "Lundberg Café & Deli AB",
+    "company": "Lundberg Café & Deli AB",
+    "address_1": "Stortorget 4",
+    "city": "Lund",
+    "postcode": "222 23",
+    "country": "SE"
+  },
+  "payment_method": "bacs",
+  "payment_method_title": "Direct bank transfer",
+  "line_items": [
+    {
+      "id": 41,
+      "name": "Kaffe mörkrost 1 kg",
+      "product_id": 15,
+      "variation_id": 0,
+      "quantity": 24,
+      "subtotal": "4320.00",
+      "total": "4320.00",
+      "sku": "VC-KAF-4735",
+      "price": 180
+    },
+    {
+      "id": 42,
+      "name": "Rooibos 250 g",
+      "product_id": 17,
+      "variation_id": 0,
+      "quantity": 12,
+      "subtotal": "650.00",
+      "total": "650.00",
+      "sku": "VC-TEA-1627",
+      "price": 54.1666
+    }
+  ],
+  "meta_data": []
+}

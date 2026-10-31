@@ -44,6 +44,8 @@ return [
         'timeout' => (int) env('WOO_TIMEOUT', 15),
         // Only disable for local stores with self-signed certificates.
         'verify_ssl' => (bool) env('WOO_VERIFY_SSL', true),
+        // Shared secret WooCommerce uses to sign webhook deliveries (X-WC-Webhook-Signature).
+        'webhook_secret' => env('WOO_WEBHOOK_SECRET'),
     ],
 
 ];
