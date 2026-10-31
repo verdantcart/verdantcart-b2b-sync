@@ -21,8 +21,11 @@ class OrderLog extends Model
     use HasFactory;
 
     public const STATUS_RECEIVED = 'received';
+
     public const STATUS_PRICED = 'priced';
+
     public const STATUS_SYNCED = 'synced';
+
     public const STATUS_FAILED = 'failed';
 
     protected function casts(): array

@@ -9,6 +9,7 @@ use App\Models\OrderLog;
 use App\Models\ProductSku;
 use App\Models\SyncJob;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Model;
 
 class DashboardController extends Controller
 {
@@ -46,7 +47,7 @@ class DashboardController extends Controller
     /**
      * Status => count, in lifecycle order, omitting statuses with no rows.
      *
-     * @param  class-string<\Illuminate\Database\Eloquent\Model>  $model
+     * @param  class-string<Model>  $model
      * @param  list<string>  $order
      * @return array<string, int>
      */

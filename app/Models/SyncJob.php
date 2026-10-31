@@ -18,13 +18,19 @@ class SyncJob extends Model
     use HasFactory;
 
     public const TYPE_ORDER_PUSH = 'order_push';
+
     public const TYPE_INVENTORY_SYNC = 'inventory_sync';
+
     public const TYPE_CUSTOMER_PULL = 'customer_pull';
 
     public const STATUS_PENDING = 'pending';
+
     public const STATUS_RUNNING = 'running';
+
     public const STATUS_SUCCEEDED = 'succeeded';
+
     public const STATUS_FAILED = 'failed';
+
     public const STATUS_DEAD = 'dead';
 
     protected function casts(): array

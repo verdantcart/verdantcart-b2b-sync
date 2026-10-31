@@ -35,4 +35,15 @@ return [
         ],
     ],
 
+    'woocommerce' => [
+        // Store root, e.g. https://shop.example.se (no /wp-json suffix).
+        'base_url' => env('WOO_BASE_URL'),
+        'consumer_key' => env('WOO_CONSUMER_KEY'),
+        'consumer_secret' => env('WOO_CONSUMER_SECRET'),
+        'api_version' => env('WOO_API_VERSION', 'wc/v3'),
+        'timeout' => (int) env('WOO_TIMEOUT', 15),
+        // Only disable for local stores with self-signed certificates.
+        'verify_ssl' => (bool) env('WOO_VERIFY_SSL', true),
+    ],
+
 ];

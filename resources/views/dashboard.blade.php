@@ -35,7 +35,7 @@
 <main>
     <header>
         <h1><span>VerdantCart</span> B2B Sync</h1>
-        <span class="muted">WooCommerce ↔ Fortnox · {{ now()->format('Y-m-d H:i') }}</span>
+        <span class="muted">WooCommerce ↔ Fortnox · {{ now()->timezone(config('app.display_timezone'))->format('Y-m-d H:i') }}</span>
     </header>
 
     <section class="grid">

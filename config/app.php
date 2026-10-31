@@ -67,6 +67,9 @@ return [
 
     'timezone' => 'UTC',
 
+    // Times are stored in UTC; this is only used when displaying them.
+    'display_timezone' => env('APP_DISPLAY_TIMEZONE', 'Europe/Stockholm'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Locale Configuration
