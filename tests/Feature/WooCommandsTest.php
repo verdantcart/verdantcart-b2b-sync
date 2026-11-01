@@ -4,10 +4,12 @@ namespace Tests\Feature;
 
 use App\Models\B2bCustomer;
 use App\Models\InventoryCache;
+use App\Models\OrderLog;
 use App\Models\ProductSku;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Sleep;
 use Tests\TestCase;
 
@@ -143,5 +145,25 @@ class WooCommandsTest extends TestCase
 
         Http::assertSent(fn (Request $r) => $r->method() === 'PUT' && $r['status'] === 'active' && $r['secret'] === 'existing-secret');
         Http::assertNotSent(fn (Request $r) => $r->method() === 'POST');
+    }
+
+    public function test_pull_order_processes_missed_orders_like_a_webhook(): void
+    {
+        Queue::fake();
+        $order = json_decode(file_get_contents(base_path('tests/Fixtures/woocommerce/order-created.json')), true);
+        Http::fake([
+            '*/orders/727*' => Http::response($order),
+            '*/orders/999*' => Http::response(['code' => 'woocommerce_rest_shop_order_invalid_id', 'message' => 'Invalid ID.'], 404),
+        ]);
+
+        $this->artisan('woo:pull-order', ['ids' => [727, 999]])
+            ->expectsOutputToContain('queued')
+            ->expectsOutputToContain('Invalid ID.')
+            ->assertFailed();
+
+        $this->assertSame(727, OrderLog::sole()->woo_order_id);
+
+        $this->artisan('woo:pull-order', ['ids' => [727]])->expectsOutputToContain('duplicate')->assertSuccessful();
+        $this->assertSame(1, OrderLog::count());
     }
 }

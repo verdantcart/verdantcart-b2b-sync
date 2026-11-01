@@ -21,6 +21,18 @@ class WooWebhookController extends Controller
         $payload = $request->json()->all();
 
         if ($payload === [] || ! isset($payload['id'])) {
+            // Usually WooCommerce could not build the resource and sent a WP REST error instead
+            // (e.g. {"code":"rest_no_route"}). Log enough to see why, but no personal data.
+            // Missed orders can be recovered with `php artisan woo:pull-order {id}`.
+            Log::warning('WooCommerce webhook without a resource id', [
+                'topic' => $topic,
+                'delivery_id' => $request->header('X-WC-Webhook-Delivery-ID'),
+                'keys' => array_slice(array_keys($payload), 0, 20),
+                'code' => $payload['code'] ?? null,
+                'message' => isset($payload['message']) ? mb_strimwidth((string) $payload['message'], 0, 300) : null,
+                'body_bytes' => strlen($request->getContent()),
+            ]);
+
             return response()->json(['error' => 'Expected a JSON resource with an id'], 422);
         }
 
