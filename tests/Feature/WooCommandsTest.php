@@ -131,20 +131,26 @@ class WooCommandsTest extends TestCase
     public function test_webhooks_command_updates_an_existing_webhook_instead_of_duplicating(): void
     {
         config(['services.woocommerce.webhook_secret' => 'existing-secret']);
-        Http::fake([
-            '*/webhooks/3*' => Http::response(['id' => 3, 'status' => 'active']),
-            '*/webhooks*' => Http::response([[
+        Http::fake(fn (Request $r) => match (true) {
+            $r->method() === 'GET' => Http::response([[
                 'id' => 3, 'topic' => 'order.created', 'status' => 'disabled',
                 'delivery_url' => 'http://127.0.0.1:8000/webhooks/woocommerce',
             ]]),
-        ]);
+            default => Http::response(['id' => 10, 'status' => 'active']),
+        });
 
         $this->artisan('woo:webhooks', ['--url' => 'http://127.0.0.1:8000/webhooks/woocommerce'])
             ->expectsOutputToContain('updated')
             ->assertSuccessful();
 
-        Http::assertSent(fn (Request $r) => $r->method() === 'PUT' && $r['status'] === 'active' && $r['secret'] === 'existing-secret');
-        Http::assertNotSent(fn (Request $r) => $r->method() === 'POST');
+        // The existing (disabled) order.created webhook is re-activated, not duplicated...
+        Http::assertSent(fn (Request $r) => $r->method() === 'PUT' && str_contains($r->url(), 'webhooks/3')
+            && $r['status'] === 'active' && $r['secret'] === 'existing-secret');
+        Http::assertNotSent(fn (Request $r) => $r->method() === 'POST' && ($r['topic'] ?? null) === 'order.created');
+        // ...and the product topics that do not exist yet are created.
+        foreach (['product.created', 'product.updated'] as $topic) {
+            Http::assertSent(fn (Request $r) => $r->method() === 'POST' && ($r['topic'] ?? null) === $topic);
+        }
     }
 
     public function test_pull_order_processes_missed_orders_like_a_webhook(): void

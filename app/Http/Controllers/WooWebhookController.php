@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\WooCommerce\Webhooks\OrderCreatedHandler;
+use App\Services\WooCommerce\Webhooks\ProductUpdatedHandler;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -15,7 +16,7 @@ use Illuminate\Support\Facades\Log;
  */
 class WooWebhookController extends Controller
 {
-    public function __invoke(Request $request, OrderCreatedHandler $orderCreated): JsonResponse
+    public function __invoke(Request $request, OrderCreatedHandler $orderCreated, ProductUpdatedHandler $productUpdated): JsonResponse
     {
         $topic = (string) $request->header('X-WC-Webhook-Topic');
         $payload = $request->json()->all();
@@ -38,6 +39,7 @@ class WooWebhookController extends Controller
 
         return match ($topic) {
             'order.created' => response()->json($orderCreated->handle($payload)),
+            'product.created', 'product.updated' => $this->productResponse($productUpdated->handle($payload)),
             default => $this->ignored($topic, $payload),
         };
     }
@@ -47,5 +49,11 @@ class WooWebhookController extends Controller
         Log::info('Ignoring WooCommerce webhook topic', ['topic' => $topic, 'resource_id' => $payload['id']]);
 
         return response()->json(['status' => 'ignored', 'topic' => $topic], 202);
+    }
+
+    /** Ignored products (no SKU, variable parents) are acknowledged with 202, like unknown topics. */
+    private function productResponse(array $result): JsonResponse
+    {
+        return response()->json($result, $result['status'] === 'ignored' ? 202 : 200);
     }
 }

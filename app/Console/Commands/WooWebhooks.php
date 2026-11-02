@@ -18,8 +18,8 @@ use InvalidArgumentException;
 #[Description('Register the WooCommerce webhooks (order.created) that point at this app')]
 class WooWebhooks extends Command
 {
-    /** Topics this app handles. product.updated is added on Day 6. */
-    public const TOPICS = ['order.created'];
+    /** Topics this app handles. */
+    public const TOPICS = ['order.created', 'product.created', 'product.updated'];
 
     public function handle(): int
     {
