@@ -78,6 +78,27 @@
                 </dl>
             </section>
             <section class="card">
+                <h2>Queue <a class="muted" href="{{ url(config('horizon.path', 'horizon')) }}" style="float:right;font-weight:400">Horizon →</a></h2>
+                @if ($queue['available'])
+                    <dl>
+                        @foreach ($queue['sizes'] as $name => $size)
+                            <dt>{{ $name }}</dt><dd>{{ $size }} waiting</dd>
+                        @endforeach
+                        <dt>Worker last seen</dt>
+                        <dd>
+                            @if ($queue['heartbeat_at'])
+                                {{ $queue['heartbeat_at']->diffForHumans() }}
+                            @else
+                                <span class="pill pending">never</span>
+                            @endif
+                        </dd>
+                    </dl>
+                    <p class="muted" style="margin:8px 0 0">Check with <code>php artisan queue:heartbeat</code></p>
+                @else
+                    <p class="muted" style="margin:0"><span class="pill failed">Redis unavailable</span> Start Redis in Laragon.</p>
+                @endif
+            </section>
+            <section class="card">
                 <h2>Sync jobs</h2>
                 <dl>
                     @forelse ($syncByStatus as $status => $total)

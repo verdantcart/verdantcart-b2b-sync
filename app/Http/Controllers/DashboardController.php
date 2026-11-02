@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\QueueHeartbeat;
 use App\Models\B2bCustomer;
 use App\Models\B2bPriceTier;
 use App\Models\InventoryCache;
@@ -10,6 +11,10 @@ use App\Models\ProductSku;
 use App\Models\SyncJob;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Queue;
+use Throwable;
 
 class DashboardController extends Controller
 {
@@ -37,6 +42,7 @@ class DashboardController extends Controller
             'ordersByStatus' => $this->countByStatus(OrderLog::class, [
                 OrderLog::STATUS_RECEIVED, OrderLog::STATUS_PRICED, OrderLog::STATUS_SYNCED, OrderLog::STATUS_FAILED,
             ]),
+            'queue' => $this->queueStatus(),
             'syncByStatus' => $this->countByStatus(SyncJob::class, [
                 SyncJob::STATUS_PENDING, SyncJob::STATUS_RUNNING, SyncJob::STATUS_SUCCEEDED,
                 SyncJob::STATUS_FAILED, SyncJob::STATUS_DEAD,
@@ -64,5 +70,28 @@ class DashboardController extends Controller
             ->filter(fn (string $status) => $counts->has($status))
             ->mapWithKeys(fn (string $status) => [$status => (int) $counts[$status]])
             ->all();
+    }
+
+    /**
+     * Waiting jobs per Redis queue and when a worker last ran the heartbeat job.
+     * Never breaks the dashboard: if Redis is down that is what the tile shows.
+     */
+    private function queueStatus(): array
+    {
+        try {
+            $sizes = collect(['orders', 'inventory', 'default'])
+                ->mapWithKeys(fn (string $q) => [$q => Queue::connection('redis')->size($q)])
+                ->all();
+            $heartbeat = Cache::get(QueueHeartbeat::CACHE_KEY);
+        } catch (Throwable $e) {
+            return ['available' => false, 'error' => class_basename($e).': '.$e->getMessage()];
+        }
+
+        return [
+            'available' => true,
+            'sizes' => $sizes,
+            'heartbeat_at' => isset($heartbeat['ran_at']) ? Carbon::parse($heartbeat['ran_at']) : null,
+            'heartbeat_latency_ms' => $heartbeat['latency_ms'] ?? null,
+        ];
     }
 }
