@@ -2,13 +2,10 @@
 
 namespace App\Services\WooCommerce\Webhooks;
 
-use App\Jobs\SyncInventory;
 use App\Models\ProductSku;
-use App\Models\SyncJob;
+use App\Services\Inventory\InventorySyncRequester;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
-use Throwable;
 
 /**
  * product.created / product.updated: keep the SKU catalogue in step with WooCommerce and
@@ -23,6 +20,8 @@ use Throwable;
  */
 class ProductUpdatedHandler
 {
+    public function __construct(private readonly InventorySyncRequester $inventory) {}
+
     /** @return array{status: string, product_sku_id?: int, sync_job_id?: int, reason?: string} */
     public function handle(array $product): array
     {
@@ -45,58 +44,26 @@ class ProductUpdatedHandler
 
     private function record(array $product, string $sku): array
     {
-        [$productSku, $syncJob, $isNew] = DB::transaction(function () use ($product, $sku) {
+        $productSku = DB::transaction(function () use ($product, $sku) {
             $productSku = $this->findSku($product, $sku);
             $attributes = $this->attributesFrom($product, $sku);
 
-            if ($productSku === null) {
-                $productSku = ProductSku::create($attributes);
-            } else {
-                $productSku->update($attributes);
-            }
+            $productSku === null
+                ? $productSku = ProductSku::create($attributes)
+                : $productSku->update($attributes);
 
-            $reported = [
-                'woo_product_id' => (int) $product['id'],
-                'woo_stock_quantity' => isset($product['stock_quantity']) ? (int) $product['stock_quantity'] : null,
-                'woo_stock_status' => $product['stock_status'] ?? null,
-                'woo_modified_gmt' => $product['date_modified_gmt'] ?? null,
-            ];
-
-            $pending = $productSku->syncJobs()
-                ->where('type', SyncJob::TYPE_INVENTORY_SYNC)
-                ->where('status', SyncJob::STATUS_PENDING)
-                ->lockForUpdate()
-                ->first();
-
-            if ($pending) {
-                $pending->update(['payload' => $reported + ['coalesced' => ($pending->payload['coalesced'] ?? 0) + 1]]);
-
-                return [$productSku, $pending, false];
-            }
-
-            $syncJob = $productSku->syncJobs()->create([
-                'type' => SyncJob::TYPE_INVENTORY_SYNC,
-                'status' => SyncJob::STATUS_PENDING,
-                'payload' => $reported,
-            ]);
-
-            return [$productSku, $syncJob, true];
+            return $productSku;
         });
 
-        if (! $isNew) {
-            return ['status' => 'coalesced', 'product_sku_id' => $productSku->id, 'sync_job_id' => $syncJob->id];
-        }
+        $result = $this->inventory->request($productSku, [
+            'source' => 'webhook',
+            'woo_product_id' => (int) $product['id'],
+            'woo_stock_quantity' => isset($product['stock_quantity']) ? (int) $product['stock_quantity'] : null,
+            'woo_stock_status' => $product['stock_status'] ?? null,
+            'woo_modified_gmt' => $product['date_modified_gmt'] ?? null,
+        ]);
 
-        try {
-            SyncInventory::dispatch($syncJob->id);
-        } catch (Throwable $e) {
-            $syncJob->update(['last_error' => 'Queue dispatch failed: '.$e->getMessage(), 'next_retry_at' => now()]);
-            Log::error('Could not queue inventory sync; left as pending', [
-                'sku' => $sku, 'sync_job_id' => $syncJob->id, 'error' => $e->getMessage(),
-            ]);
-        }
-
-        return ['status' => 'queued', 'product_sku_id' => $productSku->id, 'sync_job_id' => $syncJob->id];
+        return $result + ['product_sku_id' => $productSku->id];
     }
 
     /** SKU first; fall back to the Woo IDs so a SKU renamed in Woo keeps its history. */

@@ -48,4 +48,18 @@ class SyncJob extends Model
     {
         return $this->morphTo();
     }
+
+    /** A worker that dies mid-job (crash, timeout, reboot) leaves the row "running"; after this it may be taken over. */
+    public const STUCK_AFTER_MINUTES = 10;
+
+    public function isStuck(): bool
+    {
+        return $this->status === self::STATUS_RUNNING
+            && ($this->started_at === null || $this->started_at->lt(now()->subMinutes(self::STUCK_AFTER_MINUTES)));
+    }
+
+    public function isClaimable(): bool
+    {
+        return in_array($this->status, [self::STATUS_PENDING, self::STATUS_FAILED], true) || $this->isStuck();
+    }
 }

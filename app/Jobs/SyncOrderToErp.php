@@ -77,7 +77,7 @@ class SyncOrderToErp implements ShouldQueue
 
             if ($syncJob === null
                 || $syncJob->type !== SyncJob::TYPE_ORDER_PUSH
-                || ! in_array($syncJob->status, [SyncJob::STATUS_PENDING, SyncJob::STATUS_FAILED], true)
+                || ! $syncJob->isClaimable()
                 || ! $syncJob->syncable instanceof OrderLog) {
                 return null;
             }

@@ -15,15 +15,20 @@ use Illuminate\Console\Command;
  * jobs whose dispatch failed (Redis down), jobs from before a deploy, or failed jobs after a fix.
  */
 #[Signature('sync:dispatch-pending {--type= : order_push or inventory_sync (default: both)} {--include-failed : Also retry jobs marked failed} {--received-only : Orders: only those not yet priced}')]
-#[Description('Queue every pending sync job again (safe: jobs are idempotent)')]
+#[Description('Queue every pending (or stuck) sync job again (safe: jobs are idempotent)')]
 class SyncDispatchPending extends Command
 {
     public function handle(): int
     {
         $statuses = [SyncJob::STATUS_PENDING, ...($this->option('include-failed') ? [SyncJob::STATUS_FAILED] : [])];
 
+        $stuckBefore = now()->subMinutes(SyncJob::STUCK_AFTER_MINUTES);
+
         $jobs = SyncJob::query()
-            ->whereIn('status', $statuses)
+            ->where(fn ($q) => $q->whereIn('status', $statuses)
+                // workers that died mid-job leave rows "running"; pick those up too
+                ->orWhere(fn ($q) => $q->where('status', SyncJob::STATUS_RUNNING)
+                    ->where(fn ($q) => $q->whereNull('started_at')->orWhere('started_at', '<', $stuckBefore))))
             ->when($this->option('type'), fn ($q, $type) => $q->where('type', $type))
             ->whereIn('type', [SyncJob::TYPE_ORDER_PUSH, SyncJob::TYPE_INVENTORY_SYNC])
             ->with('syncable')
