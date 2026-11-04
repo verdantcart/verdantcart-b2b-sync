@@ -63,7 +63,8 @@ class OrderPricingTest extends TestCase
 
         [$order, $job] = $this->receiveAndProcess($this->fixture());
 
-        $this->assertSame(OrderLog::STATUS_PRICED, $order->status);
+        $this->assertSame(OrderLog::STATUS_SYNCED, $order->status); // priced, then pushed to the (fake) ERP
+        $this->assertSame('FAKE-727', $order->erp_document_number);
         [$kaffe, $te] = $order->priced_lines;
 
         $this->assertSame(['VC-KAF-4735', 24, '180.00', 'gold', '162.00', '3888.00'],
@@ -76,8 +77,8 @@ class OrderPricingTest extends TestCase
         $this->assertSame('585.00', $te['line_total']);
         $this->assertSame('4473.00', $order->subtotal);           // 3888.00 + 585.00, exact
 
-        $this->assertSame(SyncJob::STATUS_PENDING, $job->status);  // waiting for the ERP push (Day 11)
-        $this->assertSame('awaiting_erp', $job->payload['stage']);
+        $this->assertSame(SyncJob::STATUS_SUCCEEDED, $job->status);
+        $this->assertSame('FAKE-727', $job->payload['erp_document_number']);
         $this->assertSame(1, $job->attempts);
     }
 
@@ -114,7 +115,7 @@ class OrderPricingTest extends TestCase
 
         [$priced] = $this->receiveAndProcess($order);
 
-        $this->assertSame(OrderLog::STATUS_PRICED, $priced->status);
+        $this->assertSame(OrderLog::STATUS_SYNCED, $priced->status);
         $this->assertSame('VC-TEA-1627', $priced->priced_lines[1]['sku']);
     }
 
@@ -142,7 +143,7 @@ class OrderPricingTest extends TestCase
         app()->call([new SyncOrderToErp($job->id), 'handle']);
 
         $this->assertSame($first, $order->fresh()->priced_lines);
-        $this->assertSame(2, $job->fresh()->attempts);
+        $this->assertSame(1, $job->fresh()->attempts, 'a succeeded job is not run again');
     }
 
     public function test_job_ignores_rows_it_should_not_touch(): void
@@ -184,6 +185,6 @@ class OrderPricingTest extends TestCase
         Queue::assertPushed(SyncOrderToErp::class, fn ($j) => $j->syncJobId === $job->id);
 
         app()->call([new SyncOrderToErp($job->id), 'handle']);
-        $this->assertSame(OrderLog::STATUS_PRICED, $failed->fresh()->status);
+        $this->assertSame(OrderLog::STATUS_SYNCED, $failed->fresh()->status);
     }
 }

@@ -2,6 +2,10 @@
 
 namespace App\Providers;
 
+use App\Erp\ErpAdapter;
+use App\Erp\FakeErpAdapter;
+use App\Erp\Fortnox\FortnoxAdapter;
+use App\Erp\Fortnox\FortnoxClient;
 use App\Models\OrderLog;
 use App\Models\ProductSku;
 use App\Models\User;
@@ -20,6 +24,16 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->singleton(FortnoxClient::class, fn ($app) => new FortnoxClient(
+            $app->make(HttpFactory::class), (array) config('erp.fortnox'),
+        ));
+
+        $this->app->bind(ErpAdapter::class, fn ($app) => match (config('erp.driver')) {
+            'fortnox' => $app->make(FortnoxAdapter::class),
+            'fake' => $app->make(FakeErpAdapter::class),
+            default => throw new \InvalidArgumentException('Unknown ERP_DRIVER ['.config('erp.driver').']. Use "fake" or "fortnox".'),
+        });
+
         $this->app->singleton(WooCommerceClient::class, fn ($app) => new WooCommerceClient(
             http: $app->make(HttpFactory::class),
             baseUrl: (string) config('services.woocommerce.base_url'),

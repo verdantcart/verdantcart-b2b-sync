@@ -75,7 +75,7 @@ class InventorySyncTest extends TestCase
         $job = $this->sync();
 
         $this->assertSame(SyncJob::STATUS_SUCCEEDED, $job->status);
-        $this->assertSame(['warehouse' => 100, 'reserved' => 0, 'buffer' => 10, 'available' => 90, 'woo_stock_before' => 100, 'pushed' => true],
+        $this->assertSame(['warehouse' => 100, 'reserved' => 0, 'buffer' => 10, 'available' => 90, 'erp' => 'last known', 'woo_stock_before' => 100, 'pushed' => true],
             $job->payload['result']);
         Http::assertSent(fn (Request $r) => $r->method() === 'PUT'
             && $r->url() === 'https://shop.example.se/wp-json/wc/v3/products/17'

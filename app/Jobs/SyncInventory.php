@@ -2,6 +2,8 @@
 
 namespace App\Jobs;
 
+use App\Erp\ErpAdapter;
+use App\Erp\ErpException;
 use App\Models\InventoryCache;
 use App\Models\ProductSku;
 use App\Models\SyncJob;
@@ -18,8 +20,9 @@ use Throwable;
  *
  *   available = max(warehouse − reserved − buffer, 0)
  *
- * - warehouse: owned by the ERP (Day 11 refreshes it here); seeded from Woo the first time
- *   a SKU appears, and settable with `php artisan inventory:set` until then.
+ * - warehouse: read from the ERP on every run (Fortnox: DisposableQuantity). Without ERP data
+ *   (fake driver, non-stock article, ERP down) the last known figure is kept; it is seeded from
+ *   Woo the first time a SKU appears and can be set with `php artisan inventory:set`.
  * - reserved:  quantities on orders received/priced but not yet in the ERP.
  * - buffer:    per-SKU safety margin.
  *
@@ -35,7 +38,7 @@ class SyncInventory implements ShouldQueue
         $this->onQueue('inventory');
     }
 
-    public function handle(ReservationCalculator $reservations): void
+    public function handle(ReservationCalculator $reservations, ErpAdapter $erp): void
     {
         $syncJob = $this->claim();
         if ($syncJob === null) {
@@ -45,13 +48,15 @@ class SyncInventory implements ShouldQueue
         /** @var ProductSku $sku */
         $sku = $syncJob->syncable;
 
-        $inventory = $this->rebuffer($sku, $syncJob->payload ?? [], $reservations);
+        $erpStock = $this->erpStock($erp, $sku);
+        $inventory = $this->rebuffer($sku, $syncJob->payload ?? [], $reservations, $erpStock['quantity']);
         $result = [
             'warehouse' => $inventory->warehouse_quantity,
             'reserved' => $inventory->reserved_quantity,
             'buffer' => $inventory->buffer_quantity,
             'available' => $inventory->available_quantity,
-        ];
+            'erp' => $erpStock['source'],
+        ] + ($erpStock['error'] ? ['erp_error' => $erpStock['error']] : []);
 
         if ($sku->woo_product_id === null) {
             $this->finish($syncJob, SyncJob::STATUS_SUCCEEDED, $result + ['pushed' => false, 'reason' => 'SKU not linked to a WooCommerce product']);
@@ -103,9 +108,32 @@ class SyncInventory implements ShouldQueue
         });
     }
 
-    private function rebuffer(ProductSku $sku, array $payload, ReservationCalculator $reservations): InventoryCache
+    /**
+     * Warehouse stock from the ERP, if it has any for this SKU. ERP trouble is recorded but does
+     * not stop the sync: the last known warehouse figure is used instead.
+     *
+     * @return array{quantity: ?int, source: string, error: ?string}
+     */
+    private function erpStock(ErpAdapter $erp, ProductSku $sku): array
     {
-        return DB::transaction(function () use ($sku, $payload, $reservations) {
+        if (! $sku->fortnox_article_number) {
+            return ['quantity' => null, 'source' => 'none (no article number)', 'error' => null];
+        }
+
+        try {
+            $levels = $erp->stockLevels([$sku->fortnox_article_number]);
+        } catch (ErpException $e) {
+            return ['quantity' => null, 'source' => 'last known', 'error' => $e->getMessage()];
+        }
+
+        return array_key_exists($sku->fortnox_article_number, $levels)
+            ? ['quantity' => max($levels[$sku->fortnox_article_number], 0), 'source' => $erp->name(), 'error' => null]
+            : ['quantity' => null, 'source' => 'last known', 'error' => null];
+    }
+
+    private function rebuffer(ProductSku $sku, array $payload, ReservationCalculator $reservations, ?int $erpWarehouse): InventoryCache
+    {
+        return DB::transaction(function () use ($sku, $payload, $reservations, $erpWarehouse) {
             $inventory = InventoryCache::where('product_sku_id', $sku->id)->lockForUpdate()->first()
                 ?? InventoryCache::create([
                     'product_sku_id' => $sku->id,
@@ -114,7 +142,11 @@ class SyncInventory implements ShouldQueue
                     'buffer_quantity' => (int) config('b2bsync.inventory.default_buffer', 0),
                 ]);
 
-            $inventory->update(['reserved_quantity' => $reservations->reservedFor($sku)]);
+            $inventory->update(array_filter([
+                'reserved_quantity' => $reservations->reservedFor($sku),
+                'warehouse_quantity' => $erpWarehouse,
+                'erp_synced_at' => $erpWarehouse !== null ? now() : null,
+            ], fn ($v) => $v !== null));
 
             return $inventory->refresh(); // reload the generated available_quantity
         });

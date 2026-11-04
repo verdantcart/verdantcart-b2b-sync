@@ -2,6 +2,8 @@
 
 namespace App\Jobs;
 
+use App\Erp\ErpAdapter;
+use App\Erp\ErpException;
 use App\Models\OrderLog;
 use App\Models\SyncJob;
 use App\Services\Orders\OrderPricer;
@@ -15,8 +17,11 @@ use Throwable;
 /**
  * Takes one received WooCommerce order through the sync pipeline.
  *
- *   order_log:  received ──price──▶ priced ──ERP push (Day 11)──▶ synced
- *                   └───── unknown SKU etc. ─────▶ failed
+ *   order_log:  received ──price──▶ priced ──ERP push──▶ synced
+ *                   └── unknown SKU ──▶ failed     └── ERP error: stays priced, sync job failed
+ *
+ * Known gap (v0.1): if the worker dies *during* the ERP call, a retry could create the order
+ * twice. Day 12 adds a lookup by YourOrderNumber before re-pushing.
  *
  * Each step is idempotent: a priced order is never re-priced, so running the job
  * twice (duplicate dispatch, retry) is harmless. Rows are locked while working.
@@ -30,7 +35,7 @@ class SyncOrderToErp implements ShouldQueue
         $this->onQueue('orders');
     }
 
-    public function handle(OrderPricer $pricer): void
+    public function handle(OrderPricer $pricer, ErpAdapter $erp): void
     {
         $syncJob = $this->claim();
         if ($syncJob === null) {
@@ -45,13 +50,35 @@ class SyncOrderToErp implements ShouldQueue
                 $this->priceOrder($order, $pricer);
             }
 
-            // Day 11: push $order to the ERP adapter here, then mark both rows synced/succeeded.
+            if ($order->erp_document_number === null) {
+                $documentNumber = $erp->pushOrder($order);
+                $order->update([
+                    'status' => OrderLog::STATUS_SYNCED,
+                    'erp_document_number' => $documentNumber,
+                    'synced_at' => now(),
+                    'last_error' => null,
+                ]);
+            }
+
             $syncJob->update([
-                'status' => SyncJob::STATUS_PENDING,
+                'status' => SyncJob::STATUS_SUCCEEDED,
                 'last_error' => null,
+                'next_retry_at' => null,
                 'finished_at' => now(),
-                'payload' => ['woo_order_id' => $order->woo_order_id, 'stage' => 'awaiting_erp'],
+                'payload' => ['woo_order_id' => $order->woo_order_id, 'erp' => $erp->name(), 'erp_document_number' => $order->erp_document_number],
             ]);
+        } catch (ErpException $e) {
+            // The order stays "priced" (it is still a valid sale and keeps reserving stock);
+            // only the ERP step failed. Retryable errors get a retry time (see Day 12).
+            $order->update(['last_error' => $e->getMessage()]);
+            $syncJob->update([
+                'status' => SyncJob::STATUS_FAILED,
+                'last_error' => $e->getMessage(),
+                'next_retry_at' => $e->retryable ? now()->addMinute() : null,
+                'finished_at' => now(),
+                'payload' => ['woo_order_id' => $order->woo_order_id, 'erp' => $erp->name(), 'stage' => 'erp_push'],
+            ]);
+            Log::warning('Order could not be pushed to the ERP', ['woo_order_id' => $order->woo_order_id, 'erp' => $erp->name(), 'reason' => $e->getMessage()]);
         } catch (UnpriceableOrderException $e) {
             $order->update(['status' => OrderLog::STATUS_FAILED, 'last_error' => $e->getMessage()]);
             $syncJob->update(['status' => SyncJob::STATUS_FAILED, 'last_error' => $e->getMessage(), 'finished_at' => now()]);
