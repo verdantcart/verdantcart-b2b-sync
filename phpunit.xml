@@ -32,5 +32,9 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <!-- Tests never talk to a real ERP or store, whatever .env says. -->
+        <env name="ERP_DRIVER" value="fake" force="true"/>
+        <env name="FORTNOX_CLIENT_ID" value="" force="true"/>
+        <env name="FORTNOX_CLIENT_SECRET" value="" force="true"/>
     </php>
 </phpunit>
