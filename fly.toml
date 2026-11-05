@@ -1,0 +1,46 @@
+# Fly.io config for the public demo. Secrets (APP_KEY, DB_URL, …) are set with `fly secrets set`.
+app = "verdantcart-b2b-sync"
+primary_region = "arn"            # Stockholm
+swap_size_mb = 512                # headroom for the 512 MB machine
+
+[build]
+  dockerfile = "Dockerfile"
+
+[deploy]
+  release_command = "php artisan migrate --force"
+
+[env]
+  APP_ENV = "production"
+  APP_DEBUG = "false"
+  APP_URL = "https://verdantcart-b2b-sync.fly.dev"
+  APP_DISPLAY_TIMEZONE = "Europe/Stockholm"
+  LOG_CHANNEL = "stderr"
+  LOG_LEVEL = "info"
+  LOG_STDERR_FORMATTER = "Monolog\\Formatter\\JsonFormatter"
+  DB_CONNECTION = "pgsql"
+  SESSION_DRIVER = "database"
+  CACHE_STORE = "redis"
+  QUEUE_CONNECTION = "redis"
+  REDIS_CLIENT = "predis"
+  REDIS_HOST = "127.0.0.1"
+  REDIS_PORT = "6379"
+  ERP_DRIVER = "fake"             # the demo uses the fake ERP; Fortnox runs locally against the sandbox
+  HORIZON_MAX_PROCESSES = "2"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"      # workers and the scheduler must keep running
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "20s"
+    interval = "30s"
+    timeout = "5s"
+    method = "GET"
+    path = "/up"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

@@ -226,7 +226,7 @@ return [
     'environments' => [
         'production' => [
             'b2b-sync' => [
-                'maxProcesses' => 4, // sized for a small Fly.io machine
+                'maxProcesses' => (int) env('HORIZON_MAX_PROCESSES', 4), // 2 on the 512 MB Fly.io demo machine
                 'balanceMaxShift' => 1,
                 'balanceCooldown' => 3,
             ],
