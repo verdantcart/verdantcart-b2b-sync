@@ -25,6 +25,11 @@ class FakeErpAdapter implements ErpAdapter
         return 'FAKE-'.$order->woo_order_id;
     }
 
+    public function findOrder(OrderLog $order): ?string
+    {
+        return null;
+    }
+
     public function pullCustomers(): iterable
     {
         return B2bCustomer::whereNotNull('fortnox_customer_number')->get()

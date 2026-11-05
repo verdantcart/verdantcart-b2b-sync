@@ -55,7 +55,7 @@ class FortnoxAdapter implements ErpAdapter
             'Currency' => $order->currency,
             'VATIncluded' => false,
             'YourOrderNumber' => (string) $order->woo_order_id,
-            'ExternalInvoiceReference1' => 'Woo #'.$order->woo_order_id,
+            'ExternalInvoiceReference1' => self::reference($order),
             'Remarks' => 'Imported by VerdantCart B2B Sync'.($tiers ? ". Price tier: {$tiers}" : ''),
             'DeliveryName' => trim(($shipping['company'] ?? '') ?: trim(($shipping['first_name'] ?? '').' '.($shipping['last_name'] ?? ''))) ?: null,
             'DeliveryAddress1' => $shipping['address_1'] ?? null,
@@ -70,6 +70,34 @@ class FortnoxAdapter implements ErpAdapter
         }
 
         return (string) $documentNumber;
+    }
+
+    /**
+     * GET /3/orders?externalinvoicereference1=Woo #n. Search may be a "contains" match
+     * (Woo #2 vs Woo #28), so every candidate is checked exactly before it counts.
+     */
+    public function findOrder(OrderLog $order): ?string
+    {
+        $reference = self::reference($order);
+        $candidates = $this->client->get('orders', ['externalinvoicereference1' => $reference])['Orders'] ?? [];
+
+        foreach ($candidates as $candidate) {
+            if (isset($candidate['ExternalInvoiceReference1']) && $candidate['ExternalInvoiceReference1'] !== $reference) {
+                continue;
+            }
+            $full = $this->client->get('orders/'.rawurlencode((string) $candidate['DocumentNumber']))['Order'] ?? [];
+            if ((string) ($full['YourOrderNumber'] ?? '') === (string) $order->woo_order_id
+                && ! ($full['Cancelled'] ?? false)) {
+                return (string) $full['DocumentNumber'];
+            }
+        }
+
+        return null;
+    }
+
+    public static function reference(OrderLog $order): string
+    {
+        return 'Woo #'.$order->woo_order_id;
     }
 
     /** GET /3/customers, all pages. */

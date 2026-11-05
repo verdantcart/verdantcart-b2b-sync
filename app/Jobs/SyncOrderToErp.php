@@ -20,8 +20,7 @@ use Throwable;
  *   order_log:  received ──price──▶ priced ──ERP push──▶ synced
  *                   └── unknown SKU ──▶ failed     └── ERP error: stays priced, sync job failed
  *
- * Known gap (v0.1): if the worker dies *during* the ERP call, a retry could create the order
- * twice. Day 12 adds a lookup by YourOrderNumber before re-pushing.
+ * Retries never create a second ERP order: see pushOnce().
  *
  * Each step is idempotent: a priced order is never re-priced, so running the job
  * twice (duplicate dispatch, retry) is harmless. Rows are locked while working.
@@ -51,7 +50,7 @@ class SyncOrderToErp implements ShouldQueue
             }
 
             if ($order->erp_document_number === null) {
-                $documentNumber = $erp->pushOrder($order);
+                $documentNumber = $this->pushOnce($syncJob, $order, $erp);
                 $order->update([
                     'status' => OrderLog::STATUS_SYNCED,
                     'erp_document_number' => $documentNumber,
@@ -68,22 +67,38 @@ class SyncOrderToErp implements ShouldQueue
                 'payload' => ['woo_order_id' => $order->woo_order_id, 'erp' => $erp->name(), 'erp_document_number' => $order->erp_document_number],
             ]);
         } catch (ErpException $e) {
-            // The order stays "priced" (it is still a valid sale and keeps reserving stock);
-            // only the ERP step failed. Retryable errors get a retry time (see Day 12).
+            // The order stays "priced" (still a valid sale, keeps reserving stock); only the ERP
+            // step failed. Retryable errors are retried with backoff by `sync:retry-due`.
             $order->update(['last_error' => $e->getMessage()]);
-            $syncJob->update([
-                'status' => SyncJob::STATUS_FAILED,
-                'last_error' => $e->getMessage(),
-                'next_retry_at' => $e->retryable ? now()->addMinute() : null,
-                'finished_at' => now(),
-                'payload' => ['woo_order_id' => $order->woo_order_id, 'erp' => $erp->name(), 'stage' => 'erp_push'],
+            $syncJob->recordFailure($e->getMessage(), $e->retryable, ['woo_order_id' => $order->woo_order_id, 'erp' => $erp->name(), 'stage' => 'erp_push']);
+            Log::warning('Order could not be pushed to the ERP', [
+                'woo_order_id' => $order->woo_order_id, 'erp' => $erp->name(), 'reason' => $e->getMessage(),
+                'attempt' => $syncJob->attempts, 'status' => $syncJob->status,
             ]);
-            Log::warning('Order could not be pushed to the ERP', ['woo_order_id' => $order->woo_order_id, 'erp' => $erp->name(), 'reason' => $e->getMessage()]);
         } catch (UnpriceableOrderException $e) {
             $order->update(['status' => OrderLog::STATUS_FAILED, 'last_error' => $e->getMessage()]);
             $syncJob->update(['status' => SyncJob::STATUS_FAILED, 'last_error' => $e->getMessage(), 'finished_at' => now()]);
             Log::warning('Order could not be priced', ['woo_order_id' => $order->woo_order_id, 'reason' => $e->getMessage()]);
         }
+    }
+
+    /**
+     * Push the order, but never twice: a marker is saved before the ERP call, and if a previous
+     * attempt got that far (crash, timeout after the ERP accepted it) we look the order up first.
+     */
+    private function pushOnce(SyncJob $syncJob, OrderLog $order, ErpAdapter $erp): string
+    {
+        if (isset($syncJob->payload['erp_push_started_at']) && $existing = $erp->findOrder($order)) {
+            Log::info('Order already existed in the ERP; linked instead of creating it again', [
+                'woo_order_id' => $order->woo_order_id, 'erp_document_number' => $existing,
+            ]);
+
+            return $existing;
+        }
+
+        $syncJob->update(['payload' => array_merge($syncJob->payload ?? [], ['erp_push_started_at' => now()->toIso8601String()])]);
+
+        return $erp->pushOrder($order);
     }
 
     /** A crash outside our own error handling: record it so the row does not stay "running". */

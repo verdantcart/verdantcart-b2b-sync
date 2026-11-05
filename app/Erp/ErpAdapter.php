@@ -23,6 +23,14 @@ interface ErpAdapter
     public function pushOrder(OrderLog $order): string;
 
     /**
+     * The ERP document number of this order if it was already created there (e.g. a previous
+     * attempt crashed after the ERP accepted it), otherwise null.
+     *
+     * @throws ErpException
+     */
+    public function findOrder(OrderLog $order): ?string;
+
+    /**
      * All customers in the ERP.
      *
      * @return iterable<ErpCustomer>

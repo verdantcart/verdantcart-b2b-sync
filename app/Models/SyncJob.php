@@ -62,4 +62,30 @@ class SyncJob extends Model
     {
         return in_array($this->status, [self::STATUS_PENDING, self::STATUS_FAILED], true) || $this->isStuck();
     }
+
+    /** After this many attempts a retryable failure becomes "dead" and needs a person. */
+    public const MAX_ATTEMPTS = 6;
+
+    /** Minutes to wait before attempt n+1: 1, 2, 4, 8, 16 … capped at 60. */
+    public static function retryDelayMinutes(int $attempts): int
+    {
+        return min(2 ** max($attempts - 1, 0), 60);
+    }
+
+    /**
+     * Record a failure. Retryable errors get a retry time with exponential backoff until
+     * MAX_ATTEMPTS, then the job is "dead". Non-retryable errors wait for a manual retry.
+     */
+    public function recordFailure(string $error, bool $retryable, array $payload = []): void
+    {
+        $exhausted = $this->attempts >= self::MAX_ATTEMPTS;
+
+        $this->update([
+            'status' => $retryable && $exhausted ? self::STATUS_DEAD : self::STATUS_FAILED,
+            'last_error' => mb_strimwidth($error, 0, 1000, '…'),
+            'next_retry_at' => $retryable && ! $exhausted ? now()->addMinutes(self::retryDelayMinutes($this->attempts)) : null,
+            'finished_at' => now(),
+            'payload' => array_merge($this->payload ?? [], $payload),
+        ]);
+    }
 }

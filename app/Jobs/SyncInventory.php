@@ -176,11 +176,17 @@ class SyncInventory implements ShouldQueue
 
     private function finish(SyncJob $syncJob, string $status, array $result, ?string $error = null, bool $retryable = false): void
     {
+        if ($status === SyncJob::STATUS_FAILED) {
+            $syncJob->recordFailure((string) $error, $retryable, ['result' => $result]);
+
+            return;
+        }
+
         $syncJob->update([
             'status' => $status,
             'payload' => array_merge($syncJob->payload ?? [], ['result' => $result]),
-            'last_error' => $error,
-            'next_retry_at' => $retryable ? now()->addMinute() : null,
+            'last_error' => null,
+            'next_retry_at' => null,
             'finished_at' => now(),
         ]);
     }

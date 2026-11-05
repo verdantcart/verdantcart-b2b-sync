@@ -2,10 +2,9 @@
 
 namespace App\Console\Commands;
 
-use App\Jobs\SyncInventory;
-use App\Jobs\SyncOrderToErp;
 use App\Models\OrderLog;
 use App\Models\SyncJob;
+use App\Services\Sync\SyncJobDispatcher;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -43,9 +42,7 @@ class SyncDispatchPending extends Command
                 $job->syncable->status === OrderLog::STATUS_FAILED && $job->syncable->update(['status' => OrderLog::STATUS_RECEIVED]);
             }
 
-            $job->type === SyncJob::TYPE_ORDER_PUSH
-                ? SyncOrderToErp::dispatch($job->id)
-                : SyncInventory::dispatch($job->id);
+            app(SyncJobDispatcher::class)->dispatch($job);
         }
 
         $counts = $jobs->countBy('type');

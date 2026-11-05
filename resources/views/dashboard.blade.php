@@ -33,6 +33,7 @@
 </head>
 <body>
 <main>
+    @if (session('status'))<p class="card" style="margin:0 0 16px">{{ session('status') }}</p>@endif
     <header>
         <h1><span>VerdantCart</span> B2B Sync</h1>
         <span class="muted">WooCommerce ↔ Fortnox · {{ now()->timezone(config('app.display_timezone'))->format('Y-m-d H:i') }}</span>
@@ -99,7 +100,7 @@
                 @endif
             </section>
             <section class="card">
-                <h2>Sync jobs</h2>
+                <h2>Sync jobs <a class="muted" href="{{ route('sync-jobs.index') }}" style="float:right;font-weight:400">Failed jobs →</a></h2>
                 <dl>
                     @forelse ($syncByStatus as $status => $total)
                         <dt><span class="pill {{ $status }}">{{ $status }}</span></dt><dd>{{ $total }}</dd>
