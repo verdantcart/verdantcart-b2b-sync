@@ -78,4 +78,9 @@ class QueueSetupTest extends TestCase
         $this->withHeader('Authorization', 'Basic '.base64_encode('admin:wrong'))->get('/horizon')->assertUnauthorized();
         $this->withHeader('Authorization', 'Basic '.base64_encode('admin:s3cret'))->get('/horizon')->assertOk();
     }
+
+    public function test_heartbeat_is_scheduled_so_the_dashboard_always_shows_a_recent_worker(): void
+    {
+        $this->artisan('schedule:list')->expectsOutputToContain('queue:heartbeat')->assertSuccessful();
+    }
 }

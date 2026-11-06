@@ -1,66 +1,161 @@
 # VerdantCart B2B Sync
 
-> Open-source WooCommerce ↔ ERP middleware for Nordic B2B wholesale brands. Tiered customer pricing, inventory buffering, and Fortnox order sync. Laravel 13 + PostgreSQL + Horizon queues.
+[![CI](https://github.com/verdantcart/verdantcart-b2b-sync/actions/workflows/ci.yml/badge.svg)](https://github.com/verdantcart/verdantcart-b2b-sync/actions/workflows/ci.yml)
+![PHP](https://img.shields.io/badge/PHP-8.3%20%7C%208.4-777bb4)
+![Laravel](https://img.shields.io/badge/Laravel-13-ff2d20)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-**Status**: Day 1 scaffold. Not production-ready.
+> WooCommerce ↔ Fortnox middleware for Nordic B2B wholesale brands. Customer-tier pricing, buffered stock and automatic order transfer, so nobody re-types web orders into the ERP.
+
+**Live demo:** <https://verdantcart-b2b-sync.fly.dev> (synthetic data; the demo uses the built-in fake ERP)
+
+---
+
+## The problem
+
+A wholesale brand on WooCommerce sells to shops and cafés, not consumers. Every buyer has negotiated prices, stock is shared with other sales channels, and the books live in Fortnox. In practice that means:
+
+- orders copied from WooCommerce into Fortnox by hand, with typos and delays,
+- the shop charging list price while the invoice should use the customer's agreed price,
+- big buyers ordering stock that the warehouse has already promised elsewhere.
 
 ## What it does
 
-VerdantCart B2B Sync is a standalone Laravel application that sits between a WooCommerce store and a Fortnox ERP, handling the operational gaps standard WooCommerce doesn't address for B2B wholesale:
+| | |
+|---|---|
+| **Tier pricing** | Customers belong to price tiers (e.g. *Guld −10 %*, *Partner −18 %*, time-boxed campaigns). Every order line is priced with the tier that was valid when the order was placed, in exact öre (no float rounding). |
+| **Order sync** | A signed WooCommerce webhook records the order, a queue worker prices it and creates it in Fortnox with the B2B prices, the Woo order number and the tier used. |
+| **Inventory buffering** | Sellable stock = ERP warehouse − open orders − safety buffer, pushed back to WooCommerce only when it changes. Ends the "Woo says 555, the warehouse has 40" problem. |
+| **Reliability** | Duplicate webhooks are ignored, retries use exponential backoff, a crash mid-push never creates a second Fortnox order, and failed jobs wait on a page with a *Retry* button. |
+| **Tier API** | Token-protected REST API (`/api/tiers`, `/api/customers/{id}/tier`, `/api/customers/{id}/price/{sku}`) for other systems that need the B2B price. |
 
-- **Customer-tier pricing** — Customer A sees Tier 1 prices (€10/unit), Customer B sees Tier 2 prices (€8/unit)
-- **Real-time inventory buffering** — syncs warehouse stock so high-volume buyers don't buy out-of-stock inventory
-- **Automatic order forwarding** — pushes WooCommerce orders directly into Fortnox without manual data entry
+## Architecture
 
+```mermaid
+flowchart LR
+    W1["WooCommerce<br/>orders"] -- "order.created<br/>(signed webhook)" --> WH
+    W2["WooCommerce<br/>products & stock"] -- "product.updated" --> WH
+
+    WH["Webhook endpoint"] --> DB[("PostgreSQL<br/>orders · tiers · SKUs<br/>inventory · sync_jobs")]
+    WH --> Q[["Redis queues"]]
+    Q --> H["Horizon workers"]
+    H -- "tier price" --> P["PriceResolver"]
+    H --> A{{"ErpAdapter"}}
+    A <-- "OAuth 2.0<br/>orders · stock" --> F[("Fortnox")]
+    H -. "stock push,<br/>only on change" .-> W2
+    S["Scheduler<br/>retries · heartbeat"] --> Q
+    API["Tier API<br/>(Sanctum)"] --> DB
+
+    classDef ext fill:#eef6f0,stroke:#2f6b4f,color:#1d2a22
+    class W1,W2,F ext
 ```
-┌─────────────────────────┐     Webhooks + REST      ┌─────────────────────────┐
-│  WooCommerce            │ ───────────────────────▶ │  VerdantCart B2B Sync   │
-│  (B2B wholesale store)  │ ◀─────────────────────── │  (Laravel + Postgres)   │
-└─────────────────────────┘                          └───────────┬─────────────┘
-                                                                 │
-                                                                 ▼
-                                                     ┌─────────────────────────┐
-                                                     │  Fortnox ERP            │
-                                                     │  (customers, invoices)  │
-                                                     └─────────────────────────┘
+
+An order, end to end:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Woo as WooCommerce
+    participant App as B2B Sync
+    participant Q as Queue (Horizon)
+    participant Fx as Fortnox
+
+    Woo->>App: POST /webhooks/woocommerce (order.created, signed)
+    App->>App: verify signature · store order_log · sync_job = pending
+    App-->>Woo: 200 OK (even if the queue is down: the job is kept)
+    App->>Q: SyncOrderToErp
+    Q->>Q: price lines with the customer's tier at order time
+    Q->>Fx: POST /3/orders (B2B unit prices, Woo order number)
+    Fx-->>Q: DocumentNumber
+    Q->>App: order = synced · reserved stock released
+    Note over Q,Fx: 429 / 5xx → retry after 1, 2, 4, 8, 16 min, then "dead" on /sync-jobs
 ```
 
-## Stack
+Adding another ERP (Visma, Business Central …) means one new class implementing `App\Erp\ErpAdapter`; nothing else changes.
 
-- Laravel 13 + PHP 8.3+
-- PostgreSQL 16
-- Redis 7 (via `predis`) + Laravel Horizon *(Horizon lands on day 8)*
-- PHPUnit for tests
-- GitHub Actions CI (PHP 8.3 / 8.4 matrix)
-- Fly.io for the live demo deployment
+## Tech stack
 
-## Local development
+Laravel 13 · PHP 8.3+ · PostgreSQL 16 · Redis 7 + Laravel Horizon · Sanctum · PHPUnit (131 tests, run on SQLite and Postgres in CI) · Docker on Fly.io · Sentry · structured JSON logs
 
-Requirements: PHP 8.3+ with `pdo_pgsql`, Composer 2, Docker.
+## Running it locally
+
+Requirements: PHP 8.3+ with `pdo_pgsql`, Composer 2, PostgreSQL 16 and Redis 7 (via `docker compose up -d`, or Laragon on Windows).
 
 ```bash
-# 1. Clone
 git clone https://github.com/verdantcart/verdantcart-b2b-sync.git
 cd verdantcart-b2b-sync
-
-# 2. Install
 composer install
 cp .env.example .env
 php artisan key:generate
 
-# 3. Start Postgres 16 + Redis 7
-docker-compose up -d
+docker compose up -d                 # Postgres 16 + Redis 7
+php artisan migrate --seed           # schema + Nordic demo data
 
-# 4. Migrate
-php artisan migrate
-
-# 5. Run
-php artisan serve          # http://localhost:8000
+php artisan serve                    # dashboard at http://127.0.0.1:8000
+php artisan queue:work redis --queue=orders,inventory,default
+php artisan schedule:work            # retries + heartbeat
 ```
 
-Ports 5432 (Postgres) and 6379 (Redis) must be free. Stop any locally installed Postgres/Redis first.
+On Linux/macOS you can run `php artisan horizon` instead of `queue:work`. Windows lacks the `pcntl` extension Horizon needs, but the dashboard at `/horizon` still works with `queue:work`.
 
-Demo: coming (Fly.io deployment at the end of the build sprint).
+### Connecting a store and an ERP
+
+```bash
+# WooCommerce: add WOO_BASE_URL, WOO_CONSUMER_KEY, WOO_CONSUMER_SECRET to .env, then
+php artisan woo:ping                 # checks the API key (signs requests automatically on http://)
+php artisan woo:webhooks             # registers the webhooks and generates WOO_WEBHOOK_SECRET
+
+# Fortnox: create an integration in Fortnox's Developer Portal
+#   redirect URI: http://127.0.0.1:8000/fortnox/callback
+#   scopes:       Artikel, Företagsinformation, Kund, Order
+# add FORTNOX_CLIENT_ID / FORTNOX_CLIENT_SECRET and ERP_DRIVER=fortnox to .env, open /fortnox/connect, then
+php artisan erp:status               # shows the connected company
+php artisan erp:pull-customers       # links Fortnox customers by number, org number or e-mail
+```
+
+### Useful commands
+
+| Command | What it does |
+|---|---|
+| `woo:pull-order 24 25` | Fetch orders whose webhook never arrived and process them |
+| `inventory:set SKU 40 --buffer=5` | Set warehouse stock and safety buffer, push to Woo |
+| `inventory:sync --all` | Re-buffer every linked SKU |
+| `sync:dispatch-pending --include-failed` | Re-queue waiting or failed sync work |
+| `queue:heartbeat` | Prove a worker is consuming the queue |
+| `api:token "Name" --ability=prices:read` | Create a scoped API token |
+| `fortnox:seed-sandbox` | Copy the shop's customers and articles into a Fortnox **test** company |
+
+### Tests
+
+```bash
+php artisan test                     # SQLite in memory, never touches a real ERP or store
+```
+
+CI runs Pint plus the full suite on PHP 8.3 and 8.4, and once more against PostgreSQL 16.
+
+## Deploying
+
+`fly.toml` and `Dockerfile` run the whole app in one 512 MB machine (nginx + php-fpm, Horizon, scheduler, Redis). Secrets: `APP_KEY`, `DB_URL` (e.g. a Neon connection string), `SENTRY_LARAVEL_DSN`, `HORIZON_BASIC_AUTH_PASSWORD`. Migrations run on every deploy.
+
+```bash
+fly apps create <name>
+fly secrets set "APP_KEY=…" "DB_URL=…" "HORIZON_BASIC_AUTH_PASSWORD=…"
+fly deploy
+```
+
+## Adopting it for your store
+
+VerdantCart B2B Sync is MIT-licensed: you can run it yourself. Most brands prefer it set up for them:
+
+1. **Discovery (1 call):** your tiers, price agreements, Fortnox setup and order volume.
+2. **Setup (1–2 weeks):** connect your store and Fortnox, import customers and tiers, set buffers, test against a Fortnox sandbox with real orders.
+3. **Go-live and support:** monitoring, error alerts and changes as your price lists evolve.
+
+Interested? **hello@verdantcart.ai**
+
+## Status
+
+v0.1, built in a 15-day sprint (Oct–Nov 2026). Planned next: price lists per SKU (fixed prices on top of tier discounts), Fortnox customer creation from Woo, more ERP adapters.
 
 ## License
 
@@ -68,8 +163,8 @@ Demo: coming (Fly.io deployment at the end of the build sprint).
 
 ## Part of the VerdantCart product family
 
-- **VerdantCart Carbon Reports** — free WooCommerce carbon reporting plugin (GPL-2.0, wp.org, ~1,000 downloads)
-- **VerdantCart Pro** — commercial Pro extension with audit-ready reports and /carbon.txt publishing (Freemius)
-- **VerdantCart B2B Sync** — this project (standalone Laravel middleware, MIT)
+- **VerdantCart Carbon Reports**: free WooCommerce carbon reporting plugin (wp.org)
+- **VerdantCart Pro**: audit-ready carbon reports and /carbon.txt publishing
+- **VerdantCart B2B Sync**: this project
 
-Website: https://verdantcart.ai
+<https://verdantcart.ai>

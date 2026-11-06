@@ -1,10 +1,13 @@
 <?php
 
+use App\Http\Middleware\HorizonBasicAuth;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Support\Facades\Route;
+use Sentry\Laravel\Integration;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -24,15 +27,15 @@ return Application::configure(basePath: dirname(__DIR__))
         // Admin password check before route-model binding, so a stranger learns nothing
         // (not even whether a sync job id exists) without logging in.
         $middleware->prependToPriorityList(
-            before: \Illuminate\Routing\Middleware\SubstituteBindings::class,
-            prepend: \App\Http\Middleware\HorizonBasicAuth::class,
+            before: SubstituteBindings::class,
+            prepend: HorizonBasicAuth::class,
         );
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // Error tracking. Active once `composer require sentry/sentry-laravel` is installed and
         // SENTRY_LARAVEL_DSN is set; without the package this line is skipped.
-        if (class_exists(\Sentry\Laravel\Integration::class)) {
-            \Sentry\Laravel\Integration::handles($exceptions);
+        if (class_exists(Integration::class)) {
+            Integration::handles($exceptions);
         }
 
         $exceptions->shouldRenderJsonWhen(

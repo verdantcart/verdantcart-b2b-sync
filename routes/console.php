@@ -10,3 +10,7 @@ Artisan::command('inspire', function () {
 
 // Retries with exponential backoff. Locally: run `php artisan schedule:work` in its own window.
 Schedule::command('sync:retry-due')->everyMinute()->withoutOverlapping();
+
+// Proves the queue workers are alive: the dashboard's "Worker last seen" tile shows when this
+// last ran, so a restart (which empties the demo's in-container Redis) never leaves it at "never".
+Schedule::command('queue:heartbeat --wait=0')->everyFiveMinutes()->withoutOverlapping();

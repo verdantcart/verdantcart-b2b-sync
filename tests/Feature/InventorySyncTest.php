@@ -32,7 +32,7 @@ class InventorySyncTest extends TestCase
             'services.woocommerce.consumer_secret' => 'cs_test',
         ]);
 
-        $this->sku = ProductSku::factory()->create(['sku' => 'VC-TEA-1627', 'woo_product_id' => 17, 'woo_variation_id' => null]);
+        $this->sku = ProductSku::factory()->create(['sku' => 'VC-TEA-1627', 'woo_product_id' => 17, 'woo_variation_id' => null, 'is_active' => true]);
         InventoryCache::factory()->create([
             'product_sku_id' => $this->sku->id, 'warehouse_quantity' => 100, 'reserved_quantity' => 0, 'buffer_quantity' => 10,
         ]);
@@ -75,7 +75,8 @@ class InventorySyncTest extends TestCase
         $job = $this->sync();
 
         $this->assertSame(SyncJob::STATUS_SUCCEEDED, $job->status);
-        $this->assertSame(['warehouse' => 100, 'reserved' => 0, 'buffer' => 10, 'available' => 90, 'erp' => 'last known', 'woo_stock_before' => 100, 'pushed' => true],
+        // Postgres jsonb does not keep key order, so compare sorted.
+        $this->assertSameIgnoringKeyOrder(['warehouse' => 100, 'reserved' => 0, 'buffer' => 10, 'available' => 90, 'erp' => 'last known', 'woo_stock_before' => 100, 'pushed' => true],
             $job->payload['result']);
         Http::assertSent(fn (Request $r) => $r->method() === 'PUT'
             && $r->url() === 'https://shop.example.se/wp-json/wc/v3/products/17'
@@ -151,7 +152,7 @@ class InventorySyncTest extends TestCase
 
         $result = $this->sync(['woo_stock_quantity' => 25])->payload['result'];
 
-        $this->assertSame(['warehouse' => 25, 'buffer' => 3, 'available' => 22], array_intersect_key($result, array_flip(['warehouse', 'buffer', 'available'])));
+        $this->assertSameIgnoringKeyOrder(['warehouse' => 25, 'buffer' => 3, 'available' => 22], array_intersect_key($result, array_flip(['warehouse', 'buffer', 'available'])));
     }
 
     public function test_sku_without_woo_link_is_buffered_but_not_pushed(): void
@@ -258,5 +259,12 @@ class InventorySyncTest extends TestCase
 
         $this->assertSame(SyncJob::STATUS_SUCCEEDED, $job->fresh()->status);
         $this->assertSame(2, $job->fresh()->attempts);
+    }
+
+    private function assertSameIgnoringKeyOrder(array $expected, array $actual): void
+    {
+        ksort($expected);
+        ksort($actual);
+        $this->assertSame($expected, $actual);
     }
 }

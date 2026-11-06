@@ -15,7 +15,7 @@ use InvalidArgumentException;
  * Generates WOO_WEBHOOK_SECRET in .env if it is empty, the same way key:generate works.
  */
 #[Signature('woo:webhooks {--url= : Delivery URL (default: APP_URL + /webhooks/woocommerce)}')]
-#[Description('Register the WooCommerce webhooks (order.created) that point at this app')]
+#[Description('Register the WooCommerce webhooks (order.created, product.created, product.updated) that point at this app')]
 class WooWebhooks extends Command
 {
     /** Topics this app handles. */
