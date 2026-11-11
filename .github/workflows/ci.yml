@@ -31,6 +31,9 @@ jobs:
       - name: Pint
         run: vendor/bin/pint --test
 
+      - name: WordPress plugin tests
+        run: php wordpress/verdantcart-b2b-prices/tests/run.php
+
   tests:
     name: Tests · PHP ${{ matrix.php }} · ${{ matrix.db }}
     runs-on: ubuntu-latest
