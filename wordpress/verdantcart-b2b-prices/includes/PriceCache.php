@@ -20,7 +20,19 @@ final class PriceCache
 
     public const DOWN_SECONDS = 60;
 
+    /** @var array<string, array> transient key => entry, so one page view reads each transient once */
+    private array $memo = [];
+
     public function __construct(private readonly ApiClient $api) {}
+
+    /**
+     * What we already know about a customer without asking B2B Sync:
+     * true = B2B customer, false = not one, null = not looked up yet.
+     */
+    public function knownStatus(int $customerId): ?bool
+    {
+        return $customerId > 0 ? $this->load($customerId)['is_b2b'] : false;
+    }
 
     public function unitPrice(int $customerId, string $sku): ?string
     {
@@ -69,13 +81,19 @@ final class PriceCache
 
     public function forget(int $customerId): void
     {
+        unset($this->memo[self::key($customerId)]);
         delete_transient(self::key($customerId));
+    }
+
+    public static function generation(): int
+    {
+        return (int) get_option(Settings::OPTION_CACHE_GENERATION, 1);
     }
 
     /** The generation number lets "Clear price cache" drop every customer's prices at once. */
     public static function key(int $customerId): string
     {
-        return 'vcb2b_c_'.(int) get_option(Settings::OPTION_CACHE_GENERATION, 1).'_'.$customerId;
+        return 'vcb2b_c_'.self::generation().'_'.$customerId;
     }
 
     public static function clearAll(): void
@@ -87,13 +105,14 @@ final class PriceCache
     /** @return array{is_b2b: ?bool, tier: ?string, prices: array<string, string>, unknown: list<string>, expires: int} */
     private function load(int $customerId): array
     {
-        $entry = get_transient(self::key($customerId));
+        $key = self::key($customerId);
+        $entry = $this->memo[$key] ?? get_transient($key);
 
         if (! is_array($entry) || ($entry['expires'] ?? 0) <= time()) {
-            return ['is_b2b' => null, 'tier' => null, 'prices' => [], 'unknown' => [], 'expires' => 0];
+            $entry = ['is_b2b' => null, 'tier' => null, 'prices' => [], 'unknown' => [], 'expires' => 0];
         }
 
-        return $entry;
+        return $this->memo[$key] = $entry;
     }
 
     private function fetchInto(array $entry, int $customerId, array $skus): array
@@ -116,7 +135,9 @@ final class PriceCache
         $entry['prices'] = $result['prices'] + $entry['prices'];
         $entry['unknown'] = array_values(array_unique(array_merge($entry['unknown'], $result['missing'])));
 
-        set_transient(self::key($customerId), $entry, max(1, $entry['expires'] - time()));
+        $key = self::key($customerId);
+        $this->memo[$key] = $entry;
+        set_transient($key, $entry, max(1, $entry['expires'] - time()));
 
         return $entry;
     }

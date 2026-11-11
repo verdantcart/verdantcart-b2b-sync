@@ -25,6 +25,8 @@ final class Plugin
             Settings::register();
         }
 
+        Storefront::make($this->cache())->register();
+
         // A customer who just logged in should see their current prices, not an hour-old copy.
         add_action('wp_login', function (string $login, \WP_User $user): void {
             $this->cache()->forget($user->ID);

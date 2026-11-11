@@ -38,6 +38,7 @@ final class WpFake
     public static function reset(): void
     {
         self::$transients = self::$options = self::$requests = self::$responses = self::$logs = [];
+        FakeProduct::$all = [];
     }
 
     /** Queue the next HTTP answer from B2B Sync. */
@@ -110,7 +111,93 @@ function wc_get_logger(): object
     };
 }
 
+function esc_html(string $s): string
+{
+    return htmlspecialchars($s, ENT_QUOTES);
+}
+function __(string $s, string $domain = ''): string
+{
+    return $s;
+}
+function apply_filters(string $hook, $value, ...$args)
+{
+    return $value;
+}
+function wc_price($amount): string
+{
+    return number_format((float) $amount, 2, '.', '').' kr';
+}
+function wc_get_price_to_display($product, array $args = [])
+{
+    return $args['price'] ?? $product->get_price();
+}
+function wc_format_sale_price($regular, $sale): string
+{
+    return '<del>'.wc_price($regular).'</del> <ins>'.wc_price($sale).'</ins>';
+}
+function wc_get_product($id)
+{
+    return FakeProduct::$all[$id] ?? false;
+}
+
+/** Just enough of WC_Product for the storefront filters. */
+final class FakeProduct
+{
+    public static array $all = [];
+
+    public function __construct(
+        public int $id,
+        private string $sku,
+        private string $regular,
+        private string $type = 'simple',
+        private array $children = [],
+    ) {
+        self::$all[$id] = $this;
+    }
+
+    public function get_sku(): string
+    {
+        return $this->sku;
+    }
+
+    public function get_regular_price(): string
+    {
+        return $this->regular;
+    }
+
+    public function get_price(): string
+    {
+        return $this->regular;
+    }
+
+    public function get_price_suffix(): string
+    {
+        return '';
+    }
+
+    public function is_type(string $type): bool
+    {
+        return $this->type === $type;
+    }
+
+    public function get_children(): array
+    {
+        return $this->children;
+    }
+}
+
+final class FakeCart
+{
+    public function __construct(private array $products) {}
+
+    public function get_cart(): array
+    {
+        return array_map(fn ($p) => ['data' => $p], $this->products);
+    }
+}
+
 require_once dirname(__DIR__).'/includes/ApiClient.php';
 require_once dirname(__DIR__).'/includes/PriceCache.php';
 require_once dirname(__DIR__).'/includes/Settings.php';
 require_once dirname(__DIR__).'/includes/Plugin.php';
+require_once dirname(__DIR__).'/includes/Storefront.php';

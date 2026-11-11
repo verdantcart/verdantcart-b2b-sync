@@ -3,6 +3,7 @@
 use VerdantCart\B2bPrices\ApiClient;
 use VerdantCart\B2bPrices\PriceCache;
 use VerdantCart\B2bPrices\Settings;
+use VerdantCart\B2bPrices\Storefront;
 
 require __DIR__.'/bootstrap.php';
 
@@ -17,6 +18,11 @@ function b2bAnswer(array $prices, array $missing = [], bool $isB2b = true, int $
         ],
         'meta' => ['cache_ttl' => $ttl],
     ];
+}
+
+function shop(int $customerId = 42, bool $shopRequest = true): Storefront
+{
+    return new Storefront(new PriceCache(api()), fn () => $customerId, fn () => $shopRequest);
 }
 
 function api(): ApiClient
@@ -131,6 +137,76 @@ $tests = [
         PriceCache::clearAll();
 
         check($cache->unitPrice(42, 'A') === '150.00', 'new price after clear');
+    },
+
+    'shop: a B2B customer pays the tier price' => function () {
+        WpFake::respond(200, b2bAnswer(['VC-KAF-4735' => '162.00']));
+        $coffee = new FakeProduct(1, 'VC-KAF-4735', '180.00');
+
+        check(shop()->filterPrice('180.00', $coffee) === '162.00', 'tier price');
+    },
+
+    'shop: guests, wp-admin and products without SKU keep the shop price' => function () {
+        $coffee = new FakeProduct(1, 'VC-KAF-4735', '180.00');
+        $noSku = new FakeProduct(2, '', '50.00');
+
+        check(shop(0)->filterPrice('180.00', $coffee) === '180.00', 'guest');
+        check(shop(42, false)->filterPrice('180.00', $coffee) === '180.00', 'wp-admin');
+        check(shop()->filterPrice('50.00', $noSku) === '50.00', 'no sku');
+        check(WpFake::$requests === [], 'no request in any of these cases');
+    },
+
+    'shop: a product B2B Sync does not know keeps the shop price' => function () {
+        WpFake::respond(200, b2bAnswer([], ['LOCAL-ONLY']));
+        $local = new FakeProduct(3, 'LOCAL-ONLY', '75.00');
+
+        check(shop()->filterPrice('75.00', $local) === '75.00', 'shop price kept');
+    },
+
+    'shop: price shows the normal price crossed out and the B2B price' => function () {
+        WpFake::respond(200, b2bAnswer(['VC-KAF-4735' => '162.00']));
+        $coffee = new FakeProduct(1, 'VC-KAF-4735', '180.00');
+
+        $html = shop()->priceHtml('<span>180.00 kr</span>', $coffee);
+        check($html === '<del>180.00 kr</del> <ins>162.00 kr</ins> <span class="vcb2b-label">Your price</span>', 'html was '.$html);
+    },
+
+    'shop: variable product price ranges are cached per possible B2B customer, never shared with consumers' => function () {
+        WpFake::respond(200, b2bAnswer(['A' => '10.00']));
+        WpFake::respond(200, b2bAnswer([], [], false));
+
+        check(shop(42)->variationPricesHash(['base']) === ['base', 'vcb2b-42-1'], 'unknown customer gets own hash');
+
+        $b2b = shop(42);
+        $b2b->b2bPrice(new FakeProduct(1, 'A', '12.00'));
+        check($b2b->variationPricesHash(['base']) === ['base', 'vcb2b-42-1'], 'B2B customer gets own hash');
+
+        $consumer = shop(7);
+        $consumer->b2bPrice(new FakeProduct(2, 'A', '12.00'));
+        check($consumer->variationPricesHash(['base']) === ['base'], 'known consumer shares the normal cache');
+        check(shop(0)->variationPricesHash(['base']) === ['base'], 'guest shares the normal cache');
+    },
+
+    'shop: a listing page and a cart cost one call each' => function () {
+        new FakeProduct(10, 'A', '10.00');
+        new FakeProduct(11, 'B', '20.00');
+        new FakeProduct(12, 'PARENT', '0', 'variable', [13, 14]);
+        new FakeProduct(13, 'VAR-S', '30.00');
+        new FakeProduct(14, 'VAR-L', '35.00');
+        WpFake::respond(200, b2bAnswer(['A' => '9.00', 'B' => '18.00', 'VAR-S' => '27.00', 'VAR-L' => '31.50'], ['PARENT']));
+
+        $shop = shop();
+        $posts = array_map(fn ($id) => (object) ['ID' => $id, 'post_type' => 'product'], [10, 11, 12]);
+        $shop->prefetchPosts($posts);
+
+        check(count(WpFake::$requests) === 1, 'one call for the listing');
+        check(str_contains(WpFake::$requests[0]['url'], 'VAR-S%2CVAR-L'), 'variations included: '.WpFake::$requests[0]['url']);
+
+        foreach ([10 => '9.00', 11 => '18.00', 13 => '27.00', 14 => '31.50'] as $id => $expected) {
+            check($shop->filterPrice('x', FakeProduct::$all[$id]) === $expected, "price for #{$id}");
+        }
+        $shop->prefetchCart(new FakeCart([FakeProduct::$all[10], FakeProduct::$all[13]]));
+        check(count(WpFake::$requests) === 1, 'cart reuses the cached prices, still one call');
     },
 
     'settings: only https, or http for local development hosts' => function () {
