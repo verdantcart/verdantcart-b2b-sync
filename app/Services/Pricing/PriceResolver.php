@@ -19,6 +19,31 @@ class PriceResolver
     public function quote(B2bCustomer $customer, ProductSku $sku, ?Carbon $at = null): PriceQuote
     {
         $tier = $customer->is_active ? $this->effectiveTier($customer, $at ?? now()) : null;
+
+        return $this->quoteForTier($sku, $tier);
+    }
+
+    /**
+     * Quote many SKUs for one customer with a single tier lookup (storefront price display).
+     *
+     * @param  iterable<ProductSku>  $skus
+     * @return array<string, PriceQuote> keyed by SKU
+     */
+    public function quoteMany(B2bCustomer $customer, iterable $skus, ?Carbon $at = null): array
+    {
+        $tier = $customer->is_active ? $this->effectiveTier($customer, $at ?? now()) : null;
+
+        $quotes = [];
+        foreach ($skus as $sku) {
+            $quotes[$sku->sku] = $this->quoteForTier($sku, $tier);
+        }
+
+        return $quotes;
+    }
+
+    /** Price one SKU with an already-resolved tier (null = list price). */
+    public function quoteForTier(ProductSku $sku, ?B2bPriceTier $tier): PriceQuote
+    {
         $baseCents = self::toCents($sku->base_price);
 
         $unitCents = $tier

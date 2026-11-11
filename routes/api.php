@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\CustomerPriceController;
 use App\Http\Controllers\Api\CustomerTierController;
 use App\Http\Controllers\Api\TierController;
+use App\Http\Controllers\Api\WooCustomerPriceController;
 use Illuminate\Support\Facades\Route;
 use Laravel\Sanctum\Http\Middleware\CheckForAnyAbility;
 
@@ -25,4 +26,9 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::get('customers/{customer}/price/{sku}', [CustomerPriceController::class, 'show'])
         ->whereNumber('customer')
         ->middleware(CheckForAnyAbility::class.':prices:read')->name('api.customers.price');
+
+    // Storefront: a logged-in Woo customer's prices for many SKUs at once (B2B Prices plugin).
+    Route::get('woo-customers/{wooCustomer}/prices', [WooCustomerPriceController::class, 'index'])
+        ->whereNumber('wooCustomer')
+        ->middleware(CheckForAnyAbility::class.':prices:read')->name('api.woo-customers.prices');
 });

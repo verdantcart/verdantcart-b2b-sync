@@ -28,6 +28,7 @@ A wholesale brand on WooCommerce sells to shops and cafés, not consumers. Every
 | **Inventory buffering** | Sellable stock = ERP warehouse − open orders − safety buffer, pushed back to WooCommerce only when it changes. Ends the "Woo says 555, the warehouse has 40" problem. |
 | **Reliability** | Duplicate webhooks are ignored, retries use exponential backoff, a crash mid-push never creates a second Fortnox order, and failed jobs wait on a page with a *Retry* button. |
 | **Tier API** | Token-protected REST API (`/api/tiers`, `/api/customers/{id}/tier`, `/api/customers/{id}/price/{sku}`) for other systems that need the B2B price. |
+| **Storefront prices** | `GET /api/woo-customers/{wooId}/prices?skus=A,B,C` returns a logged-in shop customer's prices for up to 100 SKUs in one call, from the same price rules as order sync, so the shop and the Fortnox order always agree. |
 
 ## Architecture
 
@@ -151,7 +152,7 @@ VerdantCart B2B Sync is MIT-licensed: you can run it yourself. Most brands prefe
 2. **Setup (1–2 weeks):** connect your store and Fortnox, import customers and tiers, set buffers, test against a Fortnox sandbox with real orders.
 3. **Go-live and support:** monitoring, error alerts and changes as your price lists evolve.
 
-Interested? **hello@verdantcart.ai**
+Interested? **support@verdantcart.ai**
 
 ## Status
 
