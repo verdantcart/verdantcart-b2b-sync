@@ -29,6 +29,7 @@ A wholesale brand on WooCommerce sells to shops and cafés, not consumers. Every
 | **Reliability** | Duplicate webhooks are ignored, retries use exponential backoff, a crash mid-push never creates a second Fortnox order, and failed jobs wait on a page with a *Retry* button. |
 | **Tier API** | Token-protected REST API (`/api/tiers`, `/api/customers/{id}/tier`, `/api/customers/{id}/price/{sku}`) for other systems that need the B2B price. |
 | **Storefront prices** | `GET /api/woo-customers/{wooId}/prices?skus=A,B,C` returns a logged-in shop customer's prices for up to 100 SKUs in one call, from the same price rules as order sync, so the shop and the Fortnox order always agree. |
+| **Price check** | Every order compares what WooCommerce charged with the B2B price. Any difference (for example the shop charged list price while B2B Sync was unreachable) is logged and listed on the dashboard; Fortnox always gets the agreed B2B price. |
 
 ## Architecture
 

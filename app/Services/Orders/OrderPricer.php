@@ -21,7 +21,7 @@ class OrderPricer
     public function __construct(private readonly PriceResolver $prices) {}
 
     /**
-     * @return array{lines: list<array<string, mixed>>, subtotal: string, tier: ?string}
+     * @return array{lines: list<array<string, mixed>>, subtotal: string, difference: string, tier: ?string}
      *
      * @throws UnpriceableOrderException
      */
@@ -46,6 +46,7 @@ class OrderPricer
         }
 
         $subtotalCents = 0;
+        $differenceCents = 0;
         $lines = [];
         foreach ($items as $i => $item) {
             $sku = $skus[$i];
@@ -56,6 +57,7 @@ class OrderPricer
             $subtotalCents += $lineCents;
 
             $wooLineCents = PriceResolver::toCents(number_format((float) ($item['subtotal'] ?? 0), 2, '.', ''));
+            $differenceCents += $lineCents - $wooLineCents;
 
             $lines[] = [
                 'woo_line_id' => $item['id'] ?? null,
@@ -76,6 +78,7 @@ class OrderPricer
         return [
             'lines' => $lines,
             'subtotal' => PriceResolver::fromCents($subtotalCents),
+            'difference' => PriceResolver::fromCents($differenceCents),
             'tier' => $tier?->slug,
         ];
     }

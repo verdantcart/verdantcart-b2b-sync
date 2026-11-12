@@ -43,6 +43,10 @@ class DashboardController extends Controller
                 OrderLog::STATUS_RECEIVED, OrderLog::STATUS_PRICED, OrderLog::STATUS_SYNCED, OrderLog::STATUS_FAILED,
             ]),
             'queue' => $this->queueStatus(),
+            'priceDifferences' => OrderLog::withPriceDifference()->with('customer:id,company_name')
+                ->latest('received_at')->limit(10)
+                ->get(['id', 'woo_order_id', 'b2b_customer_id', 'status', 'subtotal', 'price_difference', 'received_at']),
+            'priceDifferenceCount' => OrderLog::withPriceDifference()->count(),
             'syncByStatus' => $this->countByStatus(SyncJob::class, [
                 SyncJob::STATUS_PENDING, SyncJob::STATUS_RUNNING, SyncJob::STATUS_SUCCEEDED,
                 SyncJob::STATUS_FAILED, SyncJob::STATUS_DEAD,

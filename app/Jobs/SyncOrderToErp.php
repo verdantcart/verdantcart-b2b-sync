@@ -150,8 +150,21 @@ class SyncOrderToErp implements ShouldQueue
                 'status' => OrderLog::STATUS_PRICED,
                 'priced_lines' => $result['lines'],
                 'subtotal' => $result['subtotal'], // B2B subtotal ex. VAT; Woo's own figures stay in woo_payload
+                'price_difference' => $result['difference'],
                 'last_error' => null,
             ]);
+
+            // Fortnox still gets the B2B price (the agreed price); a person decides about the difference.
+            if ($result['difference'] !== '0.00') {
+                Log::warning('Shop charged a different price than the B2B price', [
+                    'woo_order_id' => $order->woo_order_id,
+                    'difference' => $result['difference'],
+                    'lines' => collect($result['lines'])
+                        ->filter(fn (array $line) => $line['difference'] !== '0.00')
+                        ->map(fn (array $line) => "{$line['sku']}: shop {$line['woo_line_total']}, B2B {$line['line_total']}")
+                        ->values()->all(),
+                ]);
+            }
         });
 
         $order->refresh();

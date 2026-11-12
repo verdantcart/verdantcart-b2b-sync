@@ -111,6 +111,31 @@
             </section>
         </div>
     </div>
+
+    <section class="card" style="margin-top:16px">
+        <h2>Price differences
+            @if ($priceDifferenceCount > 0)<span class="pill failed" style="margin-left:6px">{{ $priceDifferenceCount }}</span>@endif
+        </h2>
+        @if ($priceDifferenceCount === 0)
+            <p class="muted" style="margin:0">None. Every order was charged in the shop at the same price that went to Fortnox.</p>
+        @else
+            <p class="muted" style="margin:0 0 8px">The shop charged a different amount than the B2B price, for example because B2B Sync was unreachable at checkout. Fortnox got the B2B price; check whether the customer should be refunded or charged the difference.</p>
+            <table>
+                <thead><tr><th>Woo order</th><th>Customer</th><th>Received</th><th style="text-align:right">B2B subtotal</th><th style="text-align:right">Difference</th></tr></thead>
+                <tbody>
+                @foreach ($priceDifferences as $order)
+                    <tr>
+                        <td>#{{ $order->woo_order_id }}</td>
+                        <td>{{ $order->customer?->company_name ?? 'Guest' }}</td>
+                        <td>{{ $order->received_at?->timezone(config('app.display_timezone'))->format('Y-m-d H:i') }}</td>
+                        <td style="text-align:right">{{ $order->subtotal }}</td>
+                        <td style="text-align:right">{{ $order->price_difference > 0 ? '+' : '' }}{{ $order->price_difference }}</td>
+                    </tr>
+                @endforeach
+                </tbody>
+            </table>
+        @endif
+    </section>
 </main>
 </body>
 </html>
