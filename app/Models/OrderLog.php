@@ -42,15 +42,25 @@ class OrderLog extends Model
         ];
     }
 
-    /** Orders where the shop charged something other than the B2B price. */
+    /**
+     * Orders where the shop charged noticeably more or less than the B2B price.
+     * Differences up to the tolerance are rounding (WooCommerce keeps prices like 54.1666).
+     */
     public function scopeWithPriceDifference(Builder $query): void
     {
-        $query->whereNotNull('price_difference')->where('price_difference', '!=', 0);
+        $tolerance = self::priceTolerance();
+        $query->whereNotNull('price_difference')
+            ->where(fn (Builder $q) => $q->where('price_difference', '>', $tolerance)->orWhere('price_difference', '<', -$tolerance));
     }
 
     public function hasPriceDifference(): bool
     {
-        return $this->price_difference !== null && (float) $this->price_difference !== 0.0;
+        return $this->price_difference !== null && abs((float) $this->price_difference) > self::priceTolerance();
+    }
+
+    public static function priceTolerance(): float
+    {
+        return max(0.0, (float) config('b2bsync.price_check.tolerance', 1.00));
     }
 
     /** @return BelongsTo<B2bCustomer, $this> */

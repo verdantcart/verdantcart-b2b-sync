@@ -7,6 +7,7 @@ use App\Erp\ErpException;
 use App\Models\InventoryCache;
 use App\Models\ProductSku;
 use App\Models\SyncJob;
+use App\Services\Alerts\Alerter;
 use App\Services\Inventory\ReservationCalculator;
 use App\Services\WooCommerce\WooCommerceClient;
 use App\Services\WooCommerce\WooCommerceException;
@@ -77,11 +78,15 @@ class SyncInventory implements ShouldQueue
 
     public function failed(Throwable $e): void
     {
-        SyncJob::whereKey($this->syncJobId)->where('status', SyncJob::STATUS_RUNNING)->update([
+        $updated = SyncJob::whereKey($this->syncJobId)->where('status', SyncJob::STATUS_RUNNING)->update([
             'status' => SyncJob::STATUS_FAILED,
             'last_error' => mb_strimwidth(class_basename($e).': '.$e->getMessage(), 0, 1000),
             'finished_at' => now(),
         ]);
+
+        if ($updated && $job = SyncJob::find($this->syncJobId)) {
+            app(Alerter::class)->syncGaveUp($job);
+        }
     }
 
     private function claim(): ?SyncJob

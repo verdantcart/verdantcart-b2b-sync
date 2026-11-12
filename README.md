@@ -127,7 +127,24 @@ php artisan erp:pull-customers       # links Fortnox customers by number, org nu
 | `api:token "Name" --ability=prices:read` | Create a scoped API token |
 | `fortnox:seed-sandbox` | Copy the shop's customers and articles into a Fortnox **test** company |
 
-### Tests
+### Alerts
+
+B2B Sync e-mails you when something needs a person:
+
+- an order or stock update **gave up** (all 6 retries used, or a problem retries cannot fix, such as an unknown SKU or a customer not linked to Fortnox);
+- the shop **charged a different price** than the B2B price by more than `B2B_PRICE_TOLERANCE` (1.00 by default; smaller differences are rounding).
+
+Each problem is mailed once, at most `B2B_ALERT_MAX_PER_HOUR` mails are sent (20), and a broken mail setup never stops the sync. Set it up in `.env`:
+
+```env
+B2B_ALERT_EMAIL=you@example.com        # comma-separate several addresses
+MAIL_MAILER=smtp                        # plus MAIL_HOST, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD
+MAIL_FROM_ADDRESS=b2b-sync@example.com
+```
+
+Then check it with `php artisan alerts:test`. Mails are sent by the queue worker (Horizon).
+
+## Tests
 
 ```bash
 php artisan test                     # SQLite in memory, never touches a real ERP or store

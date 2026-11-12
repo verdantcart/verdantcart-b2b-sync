@@ -36,5 +36,6 @@
         <env name="ERP_DRIVER" value="fake" force="true"/>
         <env name="FORTNOX_CLIENT_ID" value="" force="true"/>
         <env name="FORTNOX_CLIENT_SECRET" value="" force="true"/>
+        <env name="B2B_ALERT_EMAIL" value="" force="true"/>
     </php>
 </phpunit>

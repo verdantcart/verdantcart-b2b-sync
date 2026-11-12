@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Alerts\Alerter;
 use Database\Factories\SyncJobFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -87,5 +88,9 @@ class SyncJob extends Model
             'finished_at' => now(),
             'payload' => array_merge($this->payload ?? [], $payload),
         ]);
+
+        if ($this->status === self::STATUS_DEAD || ! $retryable) {
+            app(Alerter::class)->syncGaveUp($this);
+        }
     }
 }

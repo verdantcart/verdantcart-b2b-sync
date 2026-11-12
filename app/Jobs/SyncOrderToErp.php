@@ -6,6 +6,7 @@ use App\Erp\ErpAdapter;
 use App\Erp\ErpException;
 use App\Models\OrderLog;
 use App\Models\SyncJob;
+use App\Services\Alerts\Alerter;
 use App\Services\Orders\OrderPricer;
 use App\Services\Orders\UnpriceableOrderException;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -79,6 +80,7 @@ class SyncOrderToErp implements ShouldQueue
             $order->update(['status' => OrderLog::STATUS_FAILED, 'last_error' => $e->getMessage()]);
             $syncJob->update(['status' => SyncJob::STATUS_FAILED, 'last_error' => $e->getMessage(), 'finished_at' => now()]);
             Log::warning('Order could not be priced', ['woo_order_id' => $order->woo_order_id, 'reason' => $e->getMessage()]);
+            app(Alerter::class)->syncGaveUp($syncJob);
         }
     }
 
@@ -104,11 +106,15 @@ class SyncOrderToErp implements ShouldQueue
     /** A crash outside our own error handling: record it so the row does not stay "running". */
     public function failed(Throwable $e): void
     {
-        SyncJob::whereKey($this->syncJobId)->where('status', SyncJob::STATUS_RUNNING)->update([
+        $updated = SyncJob::whereKey($this->syncJobId)->where('status', SyncJob::STATUS_RUNNING)->update([
             'status' => SyncJob::STATUS_FAILED,
             'last_error' => mb_strimwidth(class_basename($e).': '.$e->getMessage(), 0, 1000),
             'finished_at' => now(),
         ]);
+
+        if ($updated && $job = SyncJob::find($this->syncJobId)) {
+            app(Alerter::class)->syncGaveUp($job);
+        }
     }
 
     /** Mark the sync job running, unless another worker has it or it is already done. */
@@ -155,7 +161,7 @@ class SyncOrderToErp implements ShouldQueue
             ]);
 
             // Fortnox still gets the B2B price (the agreed price); a person decides about the difference.
-            if ($result['difference'] !== '0.00') {
+            if ($order->hasPriceDifference()) {
                 Log::warning('Shop charged a different price than the B2B price', [
                     'woo_order_id' => $order->woo_order_id,
                     'difference' => $result['difference'],
@@ -164,6 +170,7 @@ class SyncOrderToErp implements ShouldQueue
                         ->map(fn (array $line) => "{$line['sku']}: shop {$line['woo_line_total']}, B2B {$line['line_total']}")
                         ->values()->all(),
                 ]);
+                DB::afterCommit(fn () => app(Alerter::class)->priceDifference($order->fresh()));
             }
         });
 
