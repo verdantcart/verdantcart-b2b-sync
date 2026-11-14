@@ -1,0 +1,218 @@
+<?php
+
+namespace App\Console\Commands;
+
+use Illuminate\Console\Attributes\Description;
+use Illuminate\Console\Attributes\Signature;
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Process;
+use Illuminate\Support\Str;
+use RuntimeException;
+
+/**
+ * One installation per customer: their own Fly app, database, secrets and Fortnox login.
+ *
+ *   php artisan customer:provision acme --dry-run     # show what would happen
+ *   php artisan customer:provision acme               # do it
+ *
+ * Needs flyctl logged in, an empty PostgreSQL database for the customer (e.g. a Neon database
+ * in an EU region), the customer's WooCommerce REST keys, and FORTNOX_CLIENT_ID/SECRET in the
+ * local .env (one VerdantCart integration in Fortnox serves every customer).
+ *
+ * Secrets go to Fly through stdin, never as command-line arguments, and are not written to disk.
+ */
+#[Signature('customer:provision
+    {slug : Short customer name, e.g. "acme" → Fly app "b2b-acme"}
+    {--woo-url= : The customer\'s shop, https://…}
+    {--database-url= : postgresql://… for the customer\'s own empty database}
+    {--alert-email= : Who gets alert e-mails (defaults to B2B_ALERT_EMAIL)}
+    {--org=personal : Fly organisation}
+    {--region=arn : Fly region (arn = Stockholm)}
+    {--dry-run : Show the steps without creating anything}')]
+#[Description('Create a new customer installation on Fly.io')]
+class CustomerProvision extends Command
+{
+    public function handle(): int
+    {
+        try {
+            $slug = $this->validSlug((string) $this->argument('slug'));
+            $app = "b2b-{$slug}";
+            $url = "https://{$app}.fly.dev";
+            $tomlPath = base_path("deploy/customers/{$slug}.fly.toml");
+
+            $config = $this->flyConfig($app, $url, (string) $this->option('region'));
+            $secrets = $this->secrets($url);
+        } catch (RuntimeException $e) {
+            $this->components->error($e->getMessage());
+
+            return self::FAILURE;
+        }
+
+        $steps = [
+            'Create the Fly app' => ['fly', 'apps', 'create', $app, '--org', (string) $this->option('org')],
+            'Store the secrets' => ['fly', 'secrets', 'import', '--app', $app, '--stage'],
+            'Build and deploy' => ['fly', 'deploy', '--config', $tomlPath, '--app', $app, '--remote-only', '--ha=false'],
+        ];
+
+        if ($this->option('dry-run')) {
+            $this->components->info("Dry run for {$app}. Nothing is created.");
+            $this->components->twoColumnDetail('Write', $this->relative($tomlPath));
+            foreach ($steps as $label => $command) {
+                $this->components->twoColumnDetail($label, implode(' ', $command));
+            }
+            $this->components->twoColumnDetail('Secrets (values hidden)', implode(', ', array_keys($secrets)));
+
+            return self::SUCCESS;
+        }
+
+        if (Process::run(['fly', 'version'])->failed()) {
+            $this->components->error('flyctl is not installed or not on PATH. Install it from fly.io/docs/flyctl/install and run "fly auth login".');
+
+            return self::FAILURE;
+        }
+
+        File::ensureDirectoryExists(dirname($tomlPath));
+        File::put($tomlPath, $config);
+        $this->components->twoColumnDetail('Wrote', $this->relative($tomlPath));
+
+        foreach ($steps as $label => $command) {
+            $process = $label === 'Store the secrets'
+                ? Process::input($this->dotenv($secrets))->timeout(120)
+                : Process::timeout($label === 'Build and deploy' ? 1200 : 120);
+
+            $result = null;
+            $this->components->task($label, function () use ($process, $command, &$result) {
+                $result = $process->run($command);
+
+                return $result->successful();
+            });
+
+            if ($result->failed()) {
+                $this->components->error(trim($result->errorOutput() ?: $result->output()) ?: "{$label} failed.");
+                $this->line("  Fix the problem and run the command again. To start over: <comment>fly apps destroy {$app}</comment>");
+
+                return self::FAILURE;
+            }
+        }
+
+        $this->nextSteps($app, $url, $secrets);
+
+        return self::SUCCESS;
+    }
+
+    private function validSlug(string $slug): string
+    {
+        if (! preg_match('/^[a-z0-9](?:[a-z0-9-]{0,26}[a-z0-9])?$/', $slug)) {
+            throw new RuntimeException('Use 1–28 lowercase letters, digits or dashes for the customer name, e.g. "acme" or "mraz-kaffe".');
+        }
+
+        return $slug;
+    }
+
+    /** fly.toml for the customer: the demo's settings, with its own app name and URL, and the real Fortnox. */
+    private function flyConfig(string $app, string $url, string $region): string
+    {
+        $template = File::get(base_path('fly.toml'));
+
+        $replacements = [
+            '/^#.*\n/' => "# Fly.io config for customer installation {$app}. Generated by customer:provision.\n",
+            '/^app = ".*"/m' => "app = \"{$app}\"",
+            '/^primary_region = "[^"]*"/m' => "primary_region = \"{$region}\"",
+            '/^(\s*)APP_URL = ".*"/m' => "\$1APP_URL = \"{$url}\"",
+            '/^(\s*)ERP_DRIVER = ".*"/m' => '$1ERP_DRIVER = "fortnox"',
+        ];
+
+        foreach ($replacements as $pattern => $replacement) {
+            $template = preg_replace($pattern, $replacement, $template, 1, $count);
+            if ($count !== 1) {
+                throw new RuntimeException("fly.toml has changed: could not set {$pattern}. Update customer:provision.");
+            }
+        }
+
+        return $template;
+    }
+
+    /** @return array<string, string> */
+    private function secrets(string $url): array
+    {
+        $fortnoxId = (string) config('erp.fortnox.client_id');
+        $fortnoxSecret = (string) config('erp.fortnox.client_secret');
+        if ($fortnoxId === '' || $fortnoxSecret === '') {
+            throw new RuntimeException('Set FORTNOX_CLIENT_ID and FORTNOX_CLIENT_SECRET in your local .env first (the VerdantCart integration in the Fortnox developer portal).');
+        }
+
+        $wooUrl = (string) ($this->option('woo-url') ?: ($this->option('dry-run') ? 'https://shop.example' : $this->ask('Customer shop URL (https://…)')));
+        if (! preg_match('#^https://[^/\s]+#', $wooUrl)) {
+            throw new RuntimeException('The shop URL must start with https://');
+        }
+
+        $databaseUrl = (string) ($this->option('database-url') ?: ($this->option('dry-run') ? 'postgresql://user:pass@host/db' : $this->secret('Database URL for this customer (postgresql://…)')));
+        if (! preg_match('#^postgres(ql)?://#', $databaseUrl)) {
+            throw new RuntimeException('The database URL must start with postgresql:// (one empty database per customer).');
+        }
+
+        $dry = (bool) $this->option('dry-run');
+        $secrets = [
+            'APP_KEY' => 'base64:'.base64_encode(random_bytes(32)),
+            'DB_URL' => $databaseUrl,
+            'WOO_BASE_URL' => rtrim($wooUrl, '/'),
+            'WOO_CONSUMER_KEY' => $dry ? 'ck_…' : (string) $this->secret('WooCommerce consumer key (ck_…)'),
+            'WOO_CONSUMER_SECRET' => $dry ? 'cs_…' : (string) $this->secret('WooCommerce consumer secret (cs_…)'),
+            'WOO_WEBHOOK_SECRET' => Str::random(40),
+            'FORTNOX_CLIENT_ID' => $fortnoxId,
+            'FORTNOX_CLIENT_SECRET' => $fortnoxSecret,
+            'FORTNOX_REDIRECT_URI' => "{$url}/fortnox/callback",
+            'HORIZON_BASIC_AUTH_USER' => 'admin',
+            'HORIZON_BASIC_AUTH_PASSWORD' => Str::password(24, symbols: false),
+            'B2B_ALERT_EMAIL' => (string) ($this->option('alert-email') ?: config('b2bsync.alerts.mail_to')),
+        ];
+
+        // Reuse the local SMTP settings for alert e-mails when there are any.
+        if (config('mail.default') === 'smtp') {
+            $smtp = (array) config('mail.mailers.smtp');
+            $secrets += array_filter([
+                'MAIL_MAILER' => 'smtp',
+                'MAIL_HOST' => (string) ($smtp['host'] ?? ''),
+                'MAIL_PORT' => (string) ($smtp['port'] ?? ''),
+                'MAIL_USERNAME' => (string) ($smtp['username'] ?? ''),
+                'MAIL_PASSWORD' => (string) ($smtp['password'] ?? ''),
+                'MAIL_FROM_ADDRESS' => (string) config('mail.from.address'),
+            ], fn (string $value) => $value !== '');
+        }
+
+        if (! $dry && ($secrets['WOO_CONSUMER_KEY'] === '' || $secrets['WOO_CONSUMER_SECRET'] === '')) {
+            throw new RuntimeException('The WooCommerce consumer key and secret are required (WooCommerce → Settings → Advanced → REST API, read/write).');
+        }
+
+        return $secrets;
+    }
+
+    /** KEY="value" lines for `fly secrets import`. */
+    private function dotenv(array $secrets): string
+    {
+        return collect($secrets)
+            ->map(fn (string $value, string $key) => $key.'="'.addcslashes($value, "\"\\\n").'"')
+            ->implode("\n")."\n";
+    }
+
+    private function nextSteps(string $app, string $url, array $secrets): void
+    {
+        $this->newLine();
+        $this->components->info("{$app} is live at {$url}");
+        $this->line('  <options=bold>Save these now</> (shown only once): Horizon and dashboard login');
+        $this->line("    user: {$secrets['HORIZON_BASIC_AUTH_USER']}   password: {$secrets['HORIZON_BASIC_AUTH_PASSWORD']}");
+        $this->newLine();
+        $this->line('  <options=bold>Then:</>');
+        $this->line("  1. In the Fortnox developer portal, add the redirect URI {$secrets['FORTNOX_REDIRECT_URI']}");
+        $this->line("  2. Let the customer log in to Fortnox at {$url}/fortnox/connect");
+        $this->line("  3. Register the shop's webhooks:   fly ssh console -a {$app} -C \"php artisan woo:webhooks\"");
+        $this->line("  4. Token for the B2B Prices plugin: fly ssh console -a {$app} -C \"php artisan api:token Shop --ability=prices:read\"");
+        $this->line("  5. Check everything:              fly ssh console -a {$app} -C \"php artisan erp:status\"");
+    }
+
+    private function relative(string $path): string
+    {
+        return Str::after($path, base_path().DIRECTORY_SEPARATOR);
+    }
+}

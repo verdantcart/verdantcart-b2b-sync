@@ -54,3 +54,6 @@ fly.toml.local
 # Private planning docs — kept locally, never pushed to the public repo
 /PROJECT-BRIEF.md
 /SETUP-INSTRUCTIONS.md
+
+# Generated per-customer Fly configs (customer:provision). Customer names stay out of the public repo.
+/deploy/customers/

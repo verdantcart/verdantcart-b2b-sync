@@ -127,7 +127,20 @@ php artisan erp:pull-customers       # links Fortnox customers by number, org nu
 | `api:token "Name" --ability=prices:read` | Create a scoped API token |
 | `fortnox:seed-sandbox` | Copy the shop's customers and articles into a Fortnox **test** company |
 
-### Requirements in Fortnox
+### New customer
+
+Every customer gets their own installation: own Fly app (`b2b-<name>`), own database, own secrets and own Fortnox login. Their data never shares a database with anyone else's.
+
+```bash
+php artisan customer:provision acme --dry-run   # shows the plan, creates nothing
+php artisan customer:provision acme \
+    --woo-url=https://shop.acme.se \
+    --database-url="postgresql://…"              # an empty database for this customer, in an EU region
+```
+
+The command asks for the shop's WooCommerce REST keys, creates the Fly app, stores the secrets (through stdin, never as command-line arguments), deploys, and prints the Horizon login once plus the remaining steps: add the customer's Fortnox redirect URI in the Fortnox developer portal, let the customer log in to Fortnox, register the shop's webhooks and create the token for the B2B Prices plugin. The generated `deploy/customers/<name>.fly.toml` is kept out of Git.
+
+## Requirements in Fortnox
 
 B2B Sync can only use the parts of Fortnox the customer's company has a licence for. Fortnox answers error **2001101** ("Det finns ingen aktiv licens för önskat scope") otherwise; B2B Sync then names the missing product in the error, the dashboard and the alert e-mail. Check a connected company with `php artisan erp:status`.
 
