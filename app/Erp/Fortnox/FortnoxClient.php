@@ -20,6 +20,9 @@ use Illuminate\Support\Sleep;
  */
 class FortnoxClient
 {
+    /** Fortnox: "Det finns ingen aktiv licens för önskat scope". */
+    public const NO_LICENCE = 2001101;
+
     public const DRIVER = 'fortnox';
 
     private const RETRY_DELAYS_MS = [1000, 3000];
@@ -188,17 +191,25 @@ class FortnoxClient
         return $response->json();
     }
 
-    /** Fortnox errors look like {"ErrorInformation": {"Error": 1, "Message": "...", "Code": 2000204}} (key case varies). */
+    /**
+     * Fortnox errors look like {"ErrorInformation": {"Error": 1, "Message": "...", "Code": 2000204}} (key case varies).
+     * A missing licence (2001101) gets a hint naming the Fortnox product the customer needs.
+     */
     private function errorFrom(Response $response, string $what): ErpException
     {
         $info = array_change_key_case((array) ($response->json('ErrorInformation') ?? $response->json('errorInformation') ?? []));
         $message = $info['message'] ?? mb_strimwidth(trim(strip_tags($response->body())), 0, 200, '…');
-        $code = isset($info['code']) ? " (code {$info['code']})" : '';
+        $errorCode = isset($info['code']) && is_numeric($info['code']) ? (int) $info['code'] : null;
+        $code = $errorCode !== null ? " (code {$errorCode})" : '';
+        $hint = $errorCode === self::NO_LICENCE
+            ? ' The Fortnox company is missing the licence for this. Orders need the add-on "Offert & Order"; customers and articles need "Offert & Order" or "Fakturering"; stock levels need "Lager". Add it in Fortnox, then click Retry.'
+            : '';
 
         return new ErpException(
-            "Fortnox {$what} failed with HTTP {$response->status()}{$code}: {$message}",
+            "Fortnox {$what} failed with HTTP {$response->status()}{$code}: {$message}.{$hint}",
             retryable: $response->status() === 429 || $response->serverError(),
             status: $response->status(),
+            errorCode: $errorCode,
         );
     }
 }

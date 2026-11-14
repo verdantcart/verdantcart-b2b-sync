@@ -13,6 +13,13 @@ use Illuminate\Console\Command;
 #[Description('Show which ERP is configured and test the connection')]
 class ErpStatus extends Command
 {
+    /** Fortnox resource => [what B2B Sync uses it for, the licence the company needs]. */
+    private const LICENCE_CHECKS = [
+        'orders' => ['Orders', 'Offert & Order'],
+        'customers' => ['Customers', 'Offert & Order or Fakturering'],
+        'articles' => ['Articles and stock', 'Offert & Order or Fakturering (stock levels also need Lager)'],
+    ];
+
     public function handle(FortnoxClient $fortnox): int
     {
         $driver = (string) config('erp.driver');
@@ -38,6 +45,29 @@ class ErpStatus extends Command
             $this->components->info('Fortnox API is reachable and the login works.');
         } catch (ErpException $e) {
             $this->components->error($e->getMessage());
+
+            return self::FAILURE;
+        }
+
+        $missing = [];
+        foreach (self::LICENCE_CHECKS as $path => [$label, $licence]) {
+            try {
+                $fortnox->get($path, ['limit' => 1]);
+                $this->components->twoColumnDetail($label, '<fg=green>OK</>');
+            } catch (ErpException $e) {
+                if ($e->errorCode !== FortnoxClient::NO_LICENCE) {
+                    $this->components->twoColumnDetail($label, '<fg=red>error</>');
+                    $this->components->error($e->getMessage());
+
+                    return self::FAILURE;
+                }
+                $this->components->twoColumnDetail($label, "<fg=red>missing licence: {$licence}</>");
+                $missing[] = $licence;
+            }
+        }
+
+        if ($missing !== []) {
+            $this->components->error('This Fortnox company cannot be used with B2B Sync until it has: '.implode('; ', array_unique($missing)).'.');
 
             return self::FAILURE;
         }

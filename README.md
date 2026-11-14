@@ -127,7 +127,25 @@ php artisan erp:pull-customers       # links Fortnox customers by number, org nu
 | `api:token "Name" --ability=prices:read` | Create a scoped API token |
 | `fortnox:seed-sandbox` | Copy the shop's customers and articles into a Fortnox **test** company |
 
-### Alerts
+### Requirements in Fortnox
+
+B2B Sync can only use the parts of Fortnox the customer's company has a licence for. Fortnox answers error **2001101** ("Det finns ingen aktiv licens för önskat scope") otherwise; B2B Sync then names the missing product in the error, the dashboard and the alert e-mail. Check a connected company with `php artisan erp:status`.
+
+| B2B Sync feature | Fortnox scope | Licence the company needs |
+| --- | --- | --- |
+| Create orders | `order` | **Offert & Order** (add-on) |
+| Read and link customers | `customer` | Offert & Order *or* Fakturering |
+| Read articles | `article` | Offert & Order *or* Fakturering |
+| Stock levels (inventory buffer) | `article` (stock fields) | **Lager** as well, otherwise articles have no stock |
+| Company name in `erp:status` | `companyinformation` | any |
+
+When the customer buys the integration from you rather than through Fortnox's own marketplace, their company also needs Fortnox's **Integration** licence (it covers any number of integrations). Prices: see [Fortnox prislista](https://www.fortnox.se/prislista). Sources: [Fortnox scopes](https://www.fortnox.se/developer/guides-and-good-to-know/scopes), [Fortnox partners and integrations](https://www.fortnox.se/om-fortnox/partners/integrationspartner).
+
+## Where data is stored
+
+The app runs on Fly.io in Stockholm (`arn`). The PostgreSQL database is on Neon; check its region with `fly ssh console -C "php artisan db:show"` and keep it in an EU region (for example AWS Frankfurt, `eu-central-1`).
+
+## Alerts
 
 B2B Sync e-mails you when something needs a person:
 
