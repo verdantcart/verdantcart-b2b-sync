@@ -59,6 +59,22 @@ class PriceResolver
         );
     }
 
+    /**
+     * The same rule as effectiveTier(), applied to tiers already loaded with their pivot
+     * (customer lists show the tier for many customers without one query each).
+     *
+     * @param  iterable<B2bPriceTier>  $tiers  loaded through B2bCustomer::priceTiers()
+     */
+    public static function pickTier(iterable $tiers, Carbon $at): ?B2bPriceTier
+    {
+        return collect($tiers)
+            ->filter(fn (B2bPriceTier $t) => $t->is_active
+                && ($t->pivot->valid_from === null || Carbon::parse($t->pivot->valid_from)->lte($at))
+                && ($t->pivot->valid_until === null || Carbon::parse($t->pivot->valid_until)->gt($at)))
+            ->sortBy([['priority', 'desc'], [fn (B2bPriceTier $a, B2bPriceTier $b) => PriceResolver::toCents($b->discount_percent) <=> PriceResolver::toCents($a->discount_percent)]])
+            ->first();
+    }
+
     public function effectiveTier(B2bCustomer $customer, Carbon $at): ?B2bPriceTier
     {
         return $customer->priceTiers()

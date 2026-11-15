@@ -1,19 +1,10 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ config('app.name') }} · Setup</title>
-    <style>
-        :root { --bg:#f6f7f4; --card:#fff; --ink:#1d2a22; --muted:#66736b; --line:#e3e7e1; --green:#2f6b4f; --red:#b42318; --amber:#b54708; }
-        * { box-sizing:border-box; }
-        body { margin:0; font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; background:var(--bg); color:var(--ink); }
-        main { max-width:760px; margin:0 auto; padding:32px 16px 64px; }
-        header { display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:8px; margin-bottom:8px; }
-        h1 { font-size:22px; margin:0; } h1 span { color:var(--green); }
-        h2 { font-size:16px; margin:0; }
-        a { color:var(--green); }
-        .muted { color:var(--muted); font-size:13px; }
+@extends('layouts.admin')
+
+@section('title', 'Setup')
+@section('width', '760px')
+
+@push('styles')
+<style>
         .progress { height:6px; background:var(--line); border-radius:99px; overflow:hidden; margin:16px 0 24px; }
         .progress span { display:block; height:100%; background:var(--green); }
         .step { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:12px; scroll-margin-top:16px; }
@@ -23,34 +14,25 @@
         .done .num { background:var(--green); color:#fff; }
         .problem .num { background:var(--red); color:#fff; }
         .step-head .pill { margin-left:auto; }
-        .pill { display:inline-block; padding:1px 8px; border-radius:99px; font-size:12px; background:#eef2ee; white-space:nowrap; }
-        .pill.done { background:#e3f1e9; color:var(--green); }
-        .pill.todo { background:#fef0e1; color:var(--amber); }
-        .pill.problem { background:#fde8e6; color:var(--red); }
         .body { margin:12px 0 0 40px; }
         @media (max-width:520px) { .body { margin-left:0; } }
         .body p { margin:0 0 10px; }
-        dl { margin:0 0 12px; display:grid; grid-template-columns:auto 1fr; gap:4px 16px; font-size:14px; }
-        dt { color:var(--muted); } dd { margin:0; overflow-wrap:anywhere; }
-        .actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
-        button, .btn { font:inherit; font-size:14px; padding:7px 14px; border-radius:8px; border:1px solid var(--green); background:var(--green); color:#fff; cursor:pointer; text-decoration:none; display:inline-block; }
-        button.secondary, .btn.secondary { background:#fff; color:var(--green); }
-        input[type=number] { font:inherit; width:110px; padding:6px 8px; border:1px solid var(--line); border-radius:8px; }
-        label.check { display:flex; gap:8px; align-items:flex-start; font-size:14px; margin:10px 0 12px; }
-        .flash { border-radius:8px; padding:10px 12px; margin:0 0 12px; font-size:14px; }
-        .flash.status { background:#e3f1e9; } .flash.error { background:#fde8e6; color:var(--red); }
-        code, .token { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:13px; background:#f1f3ef; padding:1px 5px; border-radius:4px; overflow-wrap:anywhere; }
-        .token { display:block; padding:10px; margin:8px 0; user-select:all; }
         ul.checks { list-style:none; padding:0; margin:0 0 12px; font-size:14px; }
         ul.checks li { padding:2px 0; }
-        .ok { color:var(--green); } .bad { color:var(--red); }
-    </style>
-</head>
-<body>
-<main>
-    <header>
-        <h1><span>VerdantCart</span> B2B Sync · Setup</h1>
-        <a class="muted" href="{{ route('dashboard') }}">Dashboard →</a>
+        .step h2 { font-size:16px; margin:0; }
+        .step dl { margin:0 0 12px; display:grid; grid-template-columns:auto 1fr; gap:4px 16px; font-size:14px; }
+        .step dt { color:var(--muted); } .step dd { margin:0; text-align:left; overflow-wrap:anywhere; }
+        .step input[type=number] { width:110px; }
+        .step label.check { align-items:flex-start; margin:10px 0 12px; }
+        .token { display:block; font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:13px; background:#f1f3ef; padding:10px; margin:8px 0; border-radius:4px; overflow-wrap:anywhere; user-select:all; }
+        .body .flash { margin:0 0 12px; }
+</style>
+@endpush
+
+@section('content')
+
+    <header class="page" style="margin-bottom:8px">
+        <h1>Setup</h1>
     </header>
     <p class="muted" style="margin:0">{{ $done }} of {{ count($steps) }} steps done. Each check button talks to WooCommerce or Fortnox once and remembers the answer.</p>
     <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="{{ count($steps) }}" aria-valuenow="{{ $done }}"><span style="width:{{ round($done / max(count($steps), 1) * 100) }}%"></span></div>
@@ -195,6 +177,4 @@
     @if ($done === count($steps))
         <p class="step done" style="text-align:center">All set. Place a test order in the shop and watch it arrive on the <a href="{{ route('dashboard') }}">dashboard</a>.</p>
     @endif
-</main>
-</body>
-</html>
+@endsection

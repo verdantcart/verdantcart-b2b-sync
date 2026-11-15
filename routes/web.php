@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Admin\CustomerController;
+use App\Http\Controllers\Admin\TierController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FortnoxConnectionController;
 use App\Http\Controllers\SetupController;
@@ -31,4 +33,14 @@ Route::middleware(HorizonBasicAuth::class)->prefix('setup')->name('setup')->cont
     Route::post('fortnox/check', 'checkFortnox')->name('.fortnox.check');
     Route::post('buffer', 'saveBuffer')->name('.buffer');
     Route::post('token', 'createToken')->name('.token');
+});
+
+// Price tiers and customers (with their WooCommerce and Fortnox links).
+Route::middleware(HorizonBasicAuth::class)->group(function () {
+    Route::resource('tiers', TierController::class)->except(['create', 'show']);
+
+    Route::resource('customers', CustomerController::class)->only(['index', 'create', 'store', 'show', 'update']);
+    Route::post('customers/{customer}/tiers', [CustomerController::class, 'assignTier'])->name('customers.tiers.store');
+    Route::delete('customers/{customer}/tiers/{tier}', [CustomerController::class, 'removeTier'])->name('customers.tiers.destroy');
+    Route::post('customers/{customer}/find-in-woo', [CustomerController::class, 'findInWoo'])->name('customers.find-in-woo');
 });

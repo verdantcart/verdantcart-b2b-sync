@@ -140,6 +140,16 @@ php artisan customer:provision acme \
 
 The command asks for the shop's WooCommerce REST keys, creates the Fly app, stores the secrets (through stdin, never as command-line arguments), deploys, and prints the Horizon login once plus the remaining steps: add the customer's Fortnox redirect URI in the Fortnox developer portal, let the customer log in to Fortnox, register the shop's webhooks and create the token for the B2B Prices plugin. The generated `deploy/customers/<name>.fly.toml` is kept out of Git.
 
+## Customers and price tiers
+
+Everything about who pays what is managed in the app (admin login):
+
+- **Tiers** (`/tiers`): create, edit, switch off or delete a price tier. The list shows what each tier pays for an example product. A tier with customers can't be deleted, only switched off.
+- **Customers** (`/customers`): search by company, e-mail, org. number, WooCommerce ID or Fortnox number, and filter on *no price tier*, *not linked to WooCommerce* or *not in Fortnox*.
+- **Customer page**: the customer's details, their link to a WooCommerce customer (with *Find in WooCommerce* by e-mail) and a Fortnox customer, their tiers with optional start and end dates for campaigns, what they pay for a few products, and their latest orders.
+
+A customer in several tiers gets the valid tier with the highest priority. Dates are days in the shop's time zone, and an end date includes that day. Customers already in Fortnox can be imported with `php artisan erp:pull-customers`. The tier API (`/api/tiers`) keeps working for integrations.
+
 ## Setup guide
 
 Open `/setup` (same admin login as Horizon) to finish an installation without the terminal. Five steps, each with a button:
