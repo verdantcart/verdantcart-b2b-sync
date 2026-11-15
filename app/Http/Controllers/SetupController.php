@@ -51,7 +51,10 @@ class SetupController extends Controller
         }
 
         try {
-            $rows = app(WebhookRegistrar::class)->register(WebhookRegistrar::defaultUrl(), $secret);
+            // WooCommerce pings the delivery URL when a webhook is created. With a single-process
+            // `php artisan serve` that ping waits for this request, so allow more than 30 seconds.
+            set_time_limit(120);
+            $rows = (new WebhookRegistrar(SetupGuide::interactiveWoo()))->register(WebhookRegistrar::defaultUrl(), $secret);
         } catch (WooCommerceException|InvalidArgumentException $e) {
             return $this->back('webhooks', 'error', $e->getMessage());
         }

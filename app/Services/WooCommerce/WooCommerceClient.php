@@ -30,6 +30,7 @@ class WooCommerceClient
         private readonly string $apiVersion = 'wc/v3',
         private readonly int $timeout = 15,
         private readonly bool $verifySsl = true,
+        private readonly bool $retry = true,
     ) {
         if ($baseUrl === '' || $consumerKey === '' || $consumerSecret === '') {
             throw new InvalidArgumentException(
@@ -94,6 +95,16 @@ class WooCommerceClient
     }
 
     /**
+     * A copy for a person waiting on a page: short timeout, no retries, so an unreachable store
+     * gives an error message in seconds instead of running into PHP's 30-second limit.
+     */
+    public function forInteractiveUse(int $timeout = 8): static
+    {
+        return new static($this->http, $this->baseUrl, $this->consumerKey, $this->consumerSecret,
+            $this->apiVersion, min($timeout, $this->timeout), $this->verifySsl, retry: false);
+    }
+
+    /**
      * Send a request and return the response, or throw WooCommerceException.
      * Connection errors, 429 and 5xx are retried twice with a short backoff.
      * Each attempt is signed again, because WooCommerce rejects a reused OAuth nonce.
@@ -109,7 +120,7 @@ class WooCommerceClient
             try {
                 $response = $this->dispatch($method, $url, $query, $data);
             } catch (ConnectionException $e) {
-                if ($attempt < count(self::RETRY_DELAYS_MS)) {
+                if ($this->retry && $attempt < count(self::RETRY_DELAYS_MS)) {
                     Sleep::usleep(self::RETRY_DELAYS_MS[$attempt++] * 1000);
 
                     continue;
@@ -118,7 +129,7 @@ class WooCommerceClient
             }
 
             $retryable = $response->status() === 429 || $response->serverError();
-            if ($retryable && $attempt < count(self::RETRY_DELAYS_MS)) {
+            if ($retryable && $this->retry && $attempt < count(self::RETRY_DELAYS_MS)) {
                 Sleep::usleep(self::RETRY_DELAYS_MS[$attempt++] * 1000);
 
                 continue;

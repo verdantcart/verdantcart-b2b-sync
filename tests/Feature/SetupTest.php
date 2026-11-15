@@ -12,6 +12,7 @@ use App\Services\WooCommerce\WooCommerceClient;
 use App\Support\StockBuffer;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
@@ -149,6 +150,16 @@ class SetupTest extends TestCase
         Http::fake(['*' => Http::response(['code' => 'woocommerce_rest_cannot_view', 'message' => 'Sorry, you cannot list resources.'], 401)]);
 
         $this->followingRedirects()->post('/setup/woo/check')->assertSee('WooCommerce refused the API key');
+        $this->assertSame('problem', $this->stepState('woo'));
+    }
+
+    public function test_an_unreachable_store_fails_fast_with_a_message(): void
+    {
+        Http::fake(fn () => throw new ConnectionException('cURL error 28: Operation timed out'));
+
+        $this->followingRedirects()->post('/setup/woo/check')->assertSee('Could not reach WooCommerce');
+
+        Sleep::assertNeverSlept(); // no retry back-off while someone waits on the page
         $this->assertSame('problem', $this->stepState('woo'));
     }
 

@@ -57,17 +57,23 @@ class SetupGuide
 
     // --- Checks (these call the outside world) ---------------------------------------------
 
+    /** The WooCommerce client for setup buttons: short timeout, no retries. */
+    public static function interactiveWoo(): WooCommerceClient
+    {
+        return app(WooCommerceClient::class)->forInteractiveUse();
+    }
+
     /** Calls WooCommerce: counts products, reads the currency, looks for our webhooks. */
     public function checkWoo(): array
     {
         $result = ['ok' => false, 'error' => null, 'products' => null, 'currency' => null, 'missing_webhooks' => null, 'checked_at' => now()->toIso8601String()];
 
         try {
-            $woo = app(WooCommerceClient::class);
+            $woo = self::interactiveWoo();
             $result['products'] = $woo->total('products');
             $currency = collect($woo->get('settings/general'))->firstWhere('id', 'woocommerce_currency');
             $result['currency'] = $currency['value'] ?? null;
-            $result['missing_webhooks'] = app(WebhookRegistrar::class)->missing(WebhookRegistrar::defaultUrl());
+            $result['missing_webhooks'] = (new WebhookRegistrar($woo))->missing(WebhookRegistrar::defaultUrl());
             $result['ok'] = true;
         } catch (WooCommerceException $e) {
             $result['error'] = $e->status === 401
