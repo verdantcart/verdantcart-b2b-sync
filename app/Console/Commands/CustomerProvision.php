@@ -205,10 +205,9 @@ class CustomerProvision extends Command
         $this->newLine();
         $this->line('  <options=bold>Then:</>');
         $this->line("  1. In the Fortnox developer portal, add the redirect URI {$secrets['FORTNOX_REDIRECT_URI']}");
-        $this->line("  2. Let the customer log in to Fortnox at {$url}/fortnox/connect");
-        $this->line("  3. Register the shop's webhooks:   fly ssh console -a {$app} -C \"php artisan woo:webhooks\"");
-        $this->line("  4. Token for the B2B Prices plugin: fly ssh console -a {$app} -C \"php artisan api:token Shop --ability=prices:read\"");
-        $this->line("  5. Check everything:              fly ssh console -a {$app} -C \"php artisan erp:status\"");
+        $this->line("  2. Open {$url}/setup, log in with the user above and follow the steps:");
+        $this->line('     check WooCommerce, register the webhooks, let the customer log in to Fortnox,');
+        $this->line('     choose the stock buffer and create the token for the B2B Prices plugin.');
     }
 
     private function relative(string $path): string

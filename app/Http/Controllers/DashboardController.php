@@ -9,6 +9,7 @@ use App\Models\InventoryCache;
 use App\Models\OrderLog;
 use App\Models\ProductSku;
 use App\Models\SyncJob;
+use App\Services\Setup\SetupGuide;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
@@ -18,7 +19,7 @@ use Throwable;
 
 class DashboardController extends Controller
 {
-    public function __invoke(): View
+    public function __invoke(SetupGuide $setup): View
     {
         $tiers = B2bPriceTier::query()
             ->withCount(['customers' => fn ($q) => $q
@@ -29,7 +30,14 @@ class DashboardController extends Controller
             ->orderByDesc('priority')
             ->get();
 
+        // The public demo has no setup to finish; everyone else sees what is left.
+        $setupSteps = config('b2bsync.public_dashboard') ? null : $setup->steps();
+
         return view('dashboard', [
+            'setup' => $setupSteps === null ? null : [
+                'done' => collect($setupSteps)->where('state', SetupGuide::DONE)->count(),
+                'total' => count($setupSteps),
+            ],
             'stats' => [
                 'customers' => B2bCustomer::where('is_active', true)->count(),
                 'customers_total' => B2bCustomer::count(),

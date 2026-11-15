@@ -2,6 +2,9 @@
 
 return [
 
+    // true only for the public demo: shows the dashboard without the admin login.
+    'public_dashboard' => (bool) env('B2B_PUBLIC_DASHBOARD', false),
+
     'inventory' => [
         // Units held back from WooCommerce for every SKU that has no buffer of its own yet.
         'default_buffer' => (int) env('B2B_STOCK_BUFFER', 0),

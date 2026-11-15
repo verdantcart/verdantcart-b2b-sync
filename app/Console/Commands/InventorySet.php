@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\InventoryCache;
 use App\Models\ProductSku;
 use App\Services\Inventory\InventorySyncRequester;
+use App\Support\StockBuffer;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -37,7 +38,7 @@ class InventorySet extends Command
 
         $inventory = InventoryCache::firstOrNew(['product_sku_id' => $sku->id]);
         $inventory->warehouse_quantity = $warehouse;
-        $inventory->buffer_quantity = $buffer !== null ? (int) $buffer : ($inventory->buffer_quantity ?? (int) config('b2bsync.inventory.default_buffer'));
+        $inventory->buffer_quantity = $buffer !== null ? (int) $buffer : ($inventory->buffer_quantity ?? StockBuffer::default());
         $inventory->erp_synced_at = now();
         $inventory->save();
 

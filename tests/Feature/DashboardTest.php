@@ -12,6 +12,12 @@ class DashboardTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        app()->detectEnvironment(fn () => 'local'); // admin pages are open locally without a password
+    }
+
     public function test_dashboard_renders_with_an_empty_database(): void
     {
         $this->get('/')

@@ -3,8 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Erp\ErpAdapter;
-use App\Erp\ErpException;
 use App\Erp\Fortnox\FortnoxClient;
+use App\Erp\Fortnox\LicenceCheck;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -13,13 +13,6 @@ use Illuminate\Console\Command;
 #[Description('Show which ERP is configured and test the connection')]
 class ErpStatus extends Command
 {
-    /** Fortnox resource => [what B2B Sync uses it for, the licence the company needs]. */
-    private const LICENCE_CHECKS = [
-        'orders' => ['Orders', 'Offert & Order'],
-        'customers' => ['Customers', 'Offert & Order or Fakturering'],
-        'articles' => ['Articles and stock', 'Offert & Order or Fakturering (stock levels also need Lager)'],
-    ];
-
     public function handle(FortnoxClient $fortnox): int
     {
         $driver = (string) config('erp.driver');
@@ -39,35 +32,31 @@ class ErpStatus extends Command
             return self::FAILURE;
         }
 
-        try {
-            $company = $fortnox->get('companyinformation')['CompanyInformation'] ?? [];
-            $this->components->twoColumnDetail('Company', ($company['CompanyName'] ?? '?').' ('.($company['OrganizationNumber'] ?? '?').')');
-            $this->components->info('Fortnox API is reachable and the login works.');
-        } catch (ErpException $e) {
-            $this->components->error($e->getMessage());
+        $result = app(LicenceCheck::class)->run();
+        if ($result['error'] !== null) {
+            $this->components->error($result['error']);
 
             return self::FAILURE;
         }
 
-        $missing = [];
-        foreach (self::LICENCE_CHECKS as $path => [$label, $licence]) {
-            try {
-                $fortnox->get($path, ['limit' => 1]);
-                $this->components->twoColumnDetail($label, '<fg=green>OK</>');
-            } catch (ErpException $e) {
-                if ($e->errorCode !== FortnoxClient::NO_LICENCE) {
-                    $this->components->twoColumnDetail($label, '<fg=red>error</>');
-                    $this->components->error($e->getMessage());
+        $this->components->twoColumnDetail('Company', ($result['company'] ?? '?').' ('.($result['organisation_number'] ?? '?').')');
+        $this->components->info('Fortnox API is reachable and the login works.');
 
-                    return self::FAILURE;
-                }
-                $this->components->twoColumnDetail($label, "<fg=red>missing licence: {$licence}</>");
-                $missing[] = $licence;
+        foreach ($result['checks'] as $check) {
+            if ($check['ok']) {
+                $this->components->twoColumnDetail($check['label'], '<fg=green>OK</>');
+            } elseif ($check['error'] !== null) {
+                $this->components->twoColumnDetail($check['label'], '<fg=red>error</>');
+                $this->components->error($check['error']);
+
+                return self::FAILURE;
+            } else {
+                $this->components->twoColumnDetail($check['label'], "<fg=red>missing licence: {$check['licence']}</>");
             }
         }
 
-        if ($missing !== []) {
-            $this->components->error('This Fortnox company cannot be used with B2B Sync until it has: '.implode('; ', array_unique($missing)).'.');
+        if ($result['missing'] !== []) {
+            $this->components->error('This Fortnox company cannot be used with B2B Sync until it has: '.implode('; ', $result['missing']).'.');
 
             return self::FAILURE;
         }

@@ -36,8 +36,15 @@
     @if (session('status'))<p class="card" style="margin:0 0 16px">{{ session('status') }}</p>@endif
     <header>
         <h1><span>VerdantCart</span> B2B Sync</h1>
-        <span class="muted">WooCommerce ↔ Fortnox · {{ now()->timezone(config('app.display_timezone'))->format('Y-m-d H:i') }}</span>
+        <span class="muted">WooCommerce ↔ Fortnox · {{ now()->timezone(config('app.display_timezone'))->format('Y-m-d H:i') }}@if ($setup) · <a href="{{ route('setup') }}" style="color:inherit">Setup</a>@endif</span>
     </header>
+
+    @if ($setup && $setup['done'] < $setup['total'])
+        <p class="card" style="margin:0 0 16px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center">
+            <span><strong>Setup: {{ $setup['done'] }} of {{ $setup['total'] }} steps done.</strong> <span class="muted">Orders and prices flow once every step is green.</span></span>
+            <a href="{{ route('setup') }}" style="color:var(--green);font-weight:600">Continue setup →</a>
+        </p>
+    @endif
 
     <section class="grid">
         <div class="card stat"><span class="muted">Active customers</span><b>{{ $stats['customers'] }}</b>

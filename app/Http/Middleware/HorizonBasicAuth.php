@@ -12,13 +12,20 @@ use Symfony\Component\HttpFoundation\Response;
  * This app has no user logins, so Horizon's usual "logged-in user's e-mail" gate does not fit.
  * - local without a password configured: open (development convenience)
  * - anywhere else: HORIZON_BASIC_AUTH_PASSWORD must be set and match; no password = closed
+ *
+ * With the "dashboard" parameter the check is skipped when B2B_PUBLIC_DASHBOARD=true,
+ * which only the public demo sets. A customer's dashboard shows their customers and orders.
  */
 class HorizonBasicAuth
 {
     public const VERIFIED = 'horizon_basic_auth_verified';
 
-    public function handle(Request $request, Closure $next): Response
+    public function handle(Request $request, Closure $next, ?string $page = null): Response
     {
+        if ($page === 'dashboard' && config('b2bsync.public_dashboard')) {
+            return $next($request);
+        }
+
         $user = (string) config('horizon.basic_auth.user');
         $password = (string) config('horizon.basic_auth.password');
 

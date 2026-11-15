@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Erp\ErpException;
 use App\Erp\Fortnox\FortnoxClient;
+use App\Services\Setup\SetupGuide;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -42,12 +43,15 @@ class FortnoxConnectionController extends Controller
 
         try {
             $fortnox->connect((string) $request->query('code'));
+            app(SetupGuide::class)->forgetFortnoxCheck(); // may be another company than last time
         } catch (ErpException $e) {
             Log::error('Fortnox connect failed', ['error' => $e->getMessage()]);
 
             return response(e($e->getMessage()), 502);
         }
 
-        return redirect()->route('dashboard')->with('status', 'Fortnox connected.');
+        return redirect()->to(route('setup').'#fortnox')
+            ->with('status', 'Fortnox connected. Now check that the company has the licences B2B Sync needs.')
+            ->with('step', 'fortnox');
     }
 }

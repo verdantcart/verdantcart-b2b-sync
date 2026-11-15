@@ -140,6 +140,20 @@ php artisan customer:provision acme \
 
 The command asks for the shop's WooCommerce REST keys, creates the Fly app, stores the secrets (through stdin, never as command-line arguments), deploys, and prints the Horizon login once plus the remaining steps: add the customer's Fortnox redirect URI in the Fortnox developer portal, let the customer log in to Fortnox, register the shop's webhooks and create the token for the B2B Prices plugin. The generated `deploy/customers/<name>.fly.toml` is kept out of Git.
 
+## Setup guide
+
+Open `/setup` (same admin login as Horizon) to finish an installation without the terminal. Five steps, each with a button:
+
+1. **WooCommerce**: checks the store address and REST API key, and shows the product count and currency.
+2. **Webhooks**: registers `order.created`, `product.created` and `product.updated`, pointing at this installation.
+3. **Fortnox**: the customer's Fortnox administrator logs in, then a check confirms the company has the licences B2B Sync needs (see [Requirements in Fortnox](#requirements-in-fortnox)).
+4. **Stock buffer**: units held back from WooCommerce per product. Optionally applied to every existing product at once.
+5. **B2B Prices plugin**: creates a token that can only read prices, shown once, plus the API address to paste into WooCommerce → B2B Prices.
+
+The page only calls WooCommerce or Fortnox when you press a check button, and remembers the answer. The dashboard shows "Setup: n of 5 steps done" until everything is green.
+
+The dashboard and setup guide need the admin login everywhere except locally without a password. Only the public demo sets `B2B_PUBLIC_DASHBOARD=true` to show the dashboard (never the setup guide) without it.
+
 ## Requirements in Fortnox
 
 B2B Sync can only use the parts of Fortnox the customer's company has a licence for. Fortnox answers error **2001101** ("Det finns ingen aktiv licens för önskat scope") otherwise; B2B Sync then names the missing product in the error, the dashboard and the alert e-mail. Check a connected company with `php artisan erp:status`.

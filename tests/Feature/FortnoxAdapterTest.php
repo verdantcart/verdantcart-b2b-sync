@@ -81,7 +81,7 @@ class FortnoxAdapterTest extends TestCase
 
         $this->withSession(['fortnox_oauth_state' => 'abc'])
             ->get('/fortnox/callback?code=the-code&state=abc')
-            ->assertRedirect(route('dashboard'));
+            ->assertRedirect(route('setup').'#fortnox');
 
         Http::assertSent(fn (Request $r) => $r['grant_type'] === 'authorization_code' && $r['code'] === 'the-code'
             && $r->hasHeader('Authorization', 'Basic '.base64_encode('client-123:secret-456')));

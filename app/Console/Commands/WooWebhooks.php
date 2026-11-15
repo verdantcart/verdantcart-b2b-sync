@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Services\WooCommerce\WooCommerceClient;
+use App\Services\WooCommerce\WebhookRegistrar;
 use App\Services\WooCommerce\WooCommerceException;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -19,12 +19,12 @@ use InvalidArgumentException;
 class WooWebhooks extends Command
 {
     /** Topics this app handles. */
-    public const TOPICS = ['order.created', 'product.created', 'product.updated'];
+    public const TOPICS = WebhookRegistrar::TOPICS;
 
     public function handle(): int
     {
         try {
-            $woo = app(WooCommerceClient::class);
+            $registrar = app(WebhookRegistrar::class);
         } catch (InvalidArgumentException $e) {
             $this->components->error($e->getMessage());
 
@@ -32,29 +32,11 @@ class WooWebhooks extends Command
         }
 
         $secret = $this->ensureSecret();
-        $url = $this->option('url') ?: $this->defaultUrl();
+        $url = $this->option('url') ?: WebhookRegistrar::defaultUrl();
         $this->components->info("Delivery URL: {$url}");
 
         try {
-            $existing = collect($woo->get('webhooks', ['per_page' => 100]));
-            $rows = [];
-
-            foreach (self::TOPICS as $topic) {
-                $match = $existing->first(fn (array $w) => $w['topic'] === $topic && rtrim($w['delivery_url'], '/') === rtrim($url, '/'));
-                $data = [
-                    'name' => "VerdantCart B2B Sync – {$topic}",
-                    'topic' => $topic,
-                    'delivery_url' => $url,
-                    'secret' => $secret,
-                    'status' => 'active',
-                ];
-
-                $webhook = $match
-                    ? $woo->put("webhooks/{$match['id']}", $data)
-                    : $woo->post('webhooks', $data);
-
-                $rows[] = [$webhook['id'], $topic, $webhook['status'], $match ? 'updated' : 'created'];
-            }
+            $rows = $registrar->register($url, $secret);
         } catch (WooCommerceException $e) {
             $this->components->error($e->getMessage());
             $this->line('  Is `php artisan serve` running, and can the store reach the delivery URL?');
@@ -62,7 +44,7 @@ class WooWebhooks extends Command
             return self::FAILURE;
         }
 
-        $this->table(['Woo ID', 'Topic', 'Status', ''], $rows);
+        $this->table(['Woo ID', 'Topic', 'Status', ''], array_map('array_values', $rows));
         $this->components->info('Webhooks registered. Place a test order to try them.');
 
         return self::SUCCESS;
@@ -90,16 +72,5 @@ class WooWebhooks extends Command
         $this->components->info('Generated WOO_WEBHOOK_SECRET and saved it to .env');
 
         return $secret;
-    }
-
-    /**
-     * APP_URL + /webhooks/woocommerce. "localhost" is swapped for 127.0.0.1 because Windows may
-     * resolve localhost to IPv6 (::1) while `php artisan serve` only listens on 127.0.0.1.
-     */
-    private function defaultUrl(): string
-    {
-        $base = rtrim((string) config('app.url'), '/');
-
-        return preg_replace('#^(https?://)localhost\b#', '${1}127.0.0.1', $base).'/webhooks/woocommerce';
     }
 }

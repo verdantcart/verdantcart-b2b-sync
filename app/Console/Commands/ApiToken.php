@@ -6,7 +6,6 @@ use App\Models\User;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
-use Illuminate\Support\Str;
 
 /**
  * Creates a Sanctum API token for an integration (e.g. "Woo storefront", "Postman").
@@ -28,12 +27,7 @@ class ApiToken extends Command
             return self::FAILURE;
         }
 
-        $serviceUser = User::firstOrCreate(
-            ['email' => 'api@verdantcart-b2b-sync.local'],
-            ['name' => 'API service user', 'password' => Str::random(64)],
-        );
-
-        $token = $serviceUser->createToken($this->argument('name'), $abilities);
+        $token = User::apiService()->createToken($this->argument('name'), $abilities);
 
         $this->components->info("Token for \"{$this->argument('name')}\" (abilities: ".implode(', ', $abilities).')');
         $this->line('  '.$token->plainTextToken);

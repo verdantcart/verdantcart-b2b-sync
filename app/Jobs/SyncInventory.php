@@ -11,6 +11,7 @@ use App\Services\Alerts\Alerter;
 use App\Services\Inventory\ReservationCalculator;
 use App\Services\WooCommerce\WooCommerceClient;
 use App\Services\WooCommerce\WooCommerceException;
+use App\Support\StockBuffer;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\DB;
@@ -144,7 +145,7 @@ class SyncInventory implements ShouldQueue
                     'product_sku_id' => $sku->id,
                     // First sighting of this SKU: until the ERP reports, trust Woo's own figure.
                     'warehouse_quantity' => max((int) ($payload['woo_stock_quantity'] ?? 0), 0),
-                    'buffer_quantity' => (int) config('b2bsync.inventory.default_buffer', 0),
+                    'buffer_quantity' => StockBuffer::default(),
                 ]);
 
             $inventory->update(array_filter([

@@ -49,6 +49,7 @@ class QueueSetupTest extends TestCase
     {
         config(['database.redis.default.port' => 1, 'database.redis.default.timeout' => 0.2]);
         app('redis')->purge();
+        app()->detectEnvironment(fn () => 'local');
 
         $this->get('/')->assertOk()->assertSee('Redis unavailable');
     }
