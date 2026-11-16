@@ -4,6 +4,7 @@ namespace App\Erp;
 
 use App\Models\B2bCustomer;
 use App\Models\OrderLog;
+use App\Models\ProductSku;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -36,6 +37,13 @@ class FakeErpAdapter implements ErpAdapter
             ->map(fn (B2bCustomer $c) => new ErpCustomer(
                 $c->fortnox_customer_number, $c->company_name, $c->org_number, $c->email, $c->vat_number, $c->country_code, $c->currency, $c->is_active,
             ));
+    }
+
+    /** Every product "exists" in the fake ERP under its SKU (or the article number it already has). */
+    public function pullArticles(): iterable
+    {
+        return ProductSku::query()->get()
+            ->map(fn (ProductSku $s) => new ErpArticle($s->fortnox_article_number ?? $s->sku, (string) $s->name));
     }
 
     public function stockLevels(array $articleNumbers): array

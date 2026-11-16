@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\ImportCatalogue;
+use App\Jobs\ImportErpCustomers;
 use App\Models\AppSetting;
 use App\Models\InventoryCache;
 use App\Models\ProductSku;
 use App\Models\User;
 use App\Services\Inventory\InventorySyncRequester;
+use App\Services\Setup\ImportStatus;
 use App\Services\Setup\SetupGuide;
 use App\Services\WooCommerce\WebhookRegistrar;
 use App\Services\WooCommerce\WooCommerceException;
@@ -14,6 +17,7 @@ use App\Support\StockBuffer;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 /**
@@ -104,6 +108,59 @@ class SetupController extends Controller
             });
 
         return $this->back('buffer', 'status', "Buffer set to {$buffer} for every product. {$queued} stock updates queued for WooCommerce.");
+    }
+
+    public function importProducts(): RedirectResponse
+    {
+        if (ImportStatus::isBusy(ImportStatus::get(ImportStatus::PRODUCTS))) {
+            return $this->back('products', 'status', 'The import is already running.');
+        }
+        ImportStatus::queued(ImportStatus::PRODUCTS);
+        ImportCatalogue::dispatch();
+
+        return $this->back('products', 'status', 'Import started. This page updates by itself.');
+    }
+
+    /** Link products to Fortnox articles by hand, for the ones the import could not match. */
+    public function linkProducts(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'articles' => ['required', 'array'],
+            'articles.*' => ['nullable', 'string', 'max:50'],
+        ]);
+        $numbers = collect($data['articles'])->map(fn ($n) => trim((string) $n))->filter();
+
+        $duplicates = $numbers->duplicates();
+        if ($duplicates->isNotEmpty()) {
+            return $this->back('products', 'error', 'The same Fortnox article can only be linked to one product: '.$duplicates->unique()->implode(', ').'.');
+        }
+        $taken = ProductSku::whereIn('fortnox_article_number', $numbers->values())->whereNotIn('id', $numbers->keys())->pluck('sku', 'fortnox_article_number');
+        if ($taken->isNotEmpty()) {
+            return $this->back('products', 'error', 'Already linked: '.$taken->map(fn ($sku, $number) => "{$number} → {$sku}")->implode(', ').'.');
+        }
+
+        $linked = 0;
+        foreach ($numbers as $id => $number) {
+            $sku = ProductSku::whereKey($id)->whereNull('fortnox_article_number')->first();
+            if ($sku) {
+                $sku->update(['fortnox_article_number' => $number]);
+                app(InventorySyncRequester::class)->request($sku, ['source' => 'setup:link']);
+                $linked++;
+            }
+        }
+
+        return $this->back('products', 'status', "{$linked} ".Str::plural('product', $linked).' linked. Their stock now follows Fortnox.');
+    }
+
+    public function importCustomers(): RedirectResponse
+    {
+        if (ImportStatus::isBusy(ImportStatus::get(ImportStatus::CUSTOMERS))) {
+            return $this->back('customers', 'status', 'The import is already running.');
+        }
+        ImportStatus::queued(ImportStatus::CUSTOMERS);
+        ImportErpCustomers::dispatch();
+
+        return $this->back('customers', 'status', 'Import started. This page updates by itself.');
     }
 
     public function createToken(): RedirectResponse

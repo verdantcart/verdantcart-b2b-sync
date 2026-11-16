@@ -152,15 +152,18 @@ A customer in several tiers gets the valid tier with the highest priority. Dates
 
 ## Setup guide
 
-Open `/setup` (same admin login as Horizon) to finish an installation without the terminal. Five steps, each with a button:
+Open `/setup` (same admin login as Horizon) to take a new installation from an empty database to its first order without the terminal. Eight steps, each with a button:
 
 1. **WooCommerce**: checks the store address and REST API key, and shows the product count and currency.
 2. **Webhooks**: registers `order.created`, `product.created` and `product.updated`, pointing at this installation.
 3. **Fortnox**: the customer's Fortnox administrator logs in, then a check confirms the company has the licences B2B Sync needs (see [Requirements in Fortnox](#requirements-in-fortnox)).
-4. **Stock buffer**: units held back from WooCommerce per product. Optionally applied to every existing product at once.
-5. **B2B Prices plugin**: creates a token that can only read prices, shown once, plus the API address to paste into WooCommerce → B2B Prices.
+4. **Stock buffer**: units held back from WooCommerce per product. Chosen before the products, so their first stock update uses it.
+5. **Products**: imports every WooCommerce product and variation with a SKU, and links each to the Fortnox article with the same number (also ignoring dashes and case, or by EAN). Products that can't be matched are listed with a suggestion to confirm or a field to fill in. Stock in the shop follows Fortnox only for linked products, so the import never zeroes stock for a product Fortnox doesn't know.
+6. **Customers**: imports the customers in Fortnox and links them to existing ones by customer number, org. number or e-mail.
+7. **Price tiers**: create a tier and put customers in it (see [Customers and price tiers](#customers-and-price-tiers)).
+8. **B2B Prices plugin**: creates a token that can only read prices, shown once, plus the API address to paste into WooCommerce → B2B Prices.
 
-The page only calls WooCommerce or Fortnox when you press a check button, and remembers the answer. The dashboard shows "Setup: n of 5 steps done" until everything is green.
+The check buttons call WooCommerce or Fortnox once and remember the answer. The two imports run on the queue (`default`), so the worker must be running; the page updates itself while they run. From the terminal the same imports are `php artisan woo:pull-products` and `php artisan erp:pull-customers`. The dashboard shows "Setup: n of 8 steps done" until everything is green.
 
 The dashboard and setup guide need the admin login everywhere except locally without a password. Only the public demo sets `B2B_PUBLIC_DASHBOARD=true` to show the dashboard (never the setup guide) without it.
 

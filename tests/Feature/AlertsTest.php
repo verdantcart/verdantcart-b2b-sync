@@ -75,6 +75,11 @@ class AlertsTest extends TestCase
                 return [];
             }
 
+            public function pullArticles(): iterable
+            {
+                return [];
+            }
+
             public function stockLevels(array $articleNumbers): array
             {
                 return [];

@@ -111,12 +111,15 @@ class SetupTest extends TestCase
         Http::preventStrayRequests();
 
         $response = $this->get('/setup')->assertOk()
-            ->assertSee('0 of 5 steps done')
+            ->assertSee('0 of 8 steps done')
             ->assertSee('https://b2b-acme.fly.dev/webhooks/woocommerce')
             ->assertSee('https://b2b-acme.fly.dev/fortnox/callback');
 
-        $this->assertSame(['todo', 'todo', 'todo', 'todo', 'todo'], collect($response->viewData('steps'))->pluck('state')->all());
-        $this->get('/')->assertSee('Setup: 0 of 5 steps done')->assertSee('Continue setup');
+        $this->assertSame(
+            ['woo' => 'todo', 'webhooks' => 'todo', 'fortnox' => 'todo', 'buffer' => 'todo', 'products' => 'todo', 'customers' => 'todo', 'tiers' => 'todo', 'token' => 'todo'],
+            collect($response->viewData('steps'))->pluck('state', 'key')->all(),
+        );
+        $this->get('/')->assertSee('Setup: 0 of 8 steps done')->assertSee('Continue setup');
     }
 
     public function test_missing_keys_are_explained(): void

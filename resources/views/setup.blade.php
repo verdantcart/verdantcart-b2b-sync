@@ -4,7 +4,12 @@
 @section('width', '760px')
 
 @push('styles')
+@if (collect($steps)->contains('busy', true))
+    <meta http-equiv="refresh" content="4">
+@endif
 <style>
+        .link-table input { width:100%; min-width:120px; }
+        .link-table td { vertical-align:middle; }
         .progress { height:6px; background:var(--line); border-radius:99px; overflow:hidden; margin:16px 0 24px; }
         .progress span { display:block; height:100%; background:var(--green); }
         .step { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:12px; scroll-margin-top:16px; }
@@ -152,6 +157,101 @@
                             <label class="check"><input type="checkbox" name="apply_to_all" value="1"> <span>Also use it for products that already have a buffer, and update their stock in WooCommerce now</span></label>
                             <button>Save buffer</button>
                         </form>
+                        @break
+
+                    @case('products')
+                        <p>Every product and variation with a SKU is copied from WooCommerce, then linked to the Fortnox article with the same number. Stock in the shop follows Fortnox only for linked products.</p>
+                        @if (! $step['ready'])
+                            <p class="muted">Connect WooCommerce and log in to Fortnox first.</p>
+                        @else
+                            @php($result = $step['status']['result'] ?? null)
+                            <dl>
+                                <dt>Products</dt><dd>{{ $step['total'] }} @if ($step['total'] > 0)({{ $step['total'] - $step['unlinked'] }} linked to Fortnox)@endif</dd>
+                                @if ($step['busy'])<dt>Now</dt><dd>{{ $step['status']['message'] ?? 'Working' }} …</dd>@endif
+                                @if ($result)<dt>Last import</dt><dd>{{ $result['imported'] }} imported, {{ $result['linked'] }} newly linked · {{ $when(\Illuminate\Support\Carbon::parse($step['status']['finished_at'])) }}</dd>@endif
+                            </dl>
+                            @if (($step['status']['state'] ?? null) === 'failed' && session('step') !== 'products')
+                                <p class="flash error">{{ $step['status']['error'] }}</p>
+                            @endif
+                            @if ($step['busy'] && ($step['status']['state'] ?? null) === 'queued')
+                                <p class="muted">Waiting for the queue worker. Locally, run <code>php artisan queue:work redis --queue=orders,inventory,default</code>.</p>
+                            @endif
+
+                            @if ($step['unlinked_list'] !== [])
+                                <p><strong>Not linked yet.</strong> Enter the Fortnox article number for each product, or leave it empty to do it later. Suggestions are filled in for you to check.</p>
+                                <form method="post" action="{{ route('setup.products.link') }}">@csrf
+                                    <div class="wrap"><table class="link-table">
+                                        <thead><tr><th>SKU</th><th>Product</th><th>Fortnox article</th></tr></thead>
+                                        <tbody>
+                                        @foreach ($step['unlinked_list'] as $product)
+                                            <tr>
+                                                <td><code>{{ $product['sku'] }}</code></td>
+                                                <td>{{ $product['name'] }}</td>
+                                                <td><input type="text" name="articles[{{ $product['id'] }}]" value="{{ old('articles.'.$product['id'], $product['suggestion']) }}" maxlength="50" aria-label="Fortnox article for {{ $product['sku'] }}">
+                                                    @if ($product['suggestion'])<span class="muted">suggested</span>@endif</td>
+                                            </tr>
+                                        @endforeach
+                                        </tbody>
+                                    </table></div>
+                                    <div class="actions" style="margin-top:10px"><button>Link these products</button>
+                                        @if ($step['unlinked'] > count($step['unlinked_list']))<span class="muted">{{ $step['unlinked'] - count($step['unlinked_list']) }} more after these.</span>@endif</div>
+                                </form>
+                            @elseif ($step['unlinked'] > 0 && ! $step['busy'])
+                                <p class="flash error">{{ $step['unlinked'] }} {{ Str::plural('product', $step['unlinked']) }} not linked to a Fortnox article. Import again to see them.</p>
+                            @endif
+
+                            @unless ($step['busy'])
+                                <form method="post" action="{{ route('setup.products.import') }}" class="actions" style="margin-top:12px">@csrf
+                                    <button @class(['secondary' => $result !== null])>{{ $result ? 'Import again' : 'Import products' }}</button>
+                                    <span class="muted">Safe to repeat: existing products are updated, links are kept.</span>
+                                </form>
+                            @endunless
+                        @endif
+                        @break
+
+                    @case('customers')
+                        <p>Your customers in Fortnox are copied here and linked to any you already added, by customer number, org. number or e-mail. Customers without an e-mail in Fortnox are skipped.</p>
+                        @if (! $step['ready'])
+                            <p class="muted">Log in to Fortnox first.</p>
+                        @else
+                            @php($result = $step['status']['result'] ?? null)
+                            <dl>
+                                <dt>Customers</dt><dd>{{ $step['total'] }} ({{ $step['linked'] }} linked to Fortnox)</dd>
+                                @if ($step['busy'])<dt>Now</dt><dd>{{ $step['status']['message'] ?? 'Working' }} …</dd>@endif
+                                @if ($result)<dt>Last import</dt><dd>{{ $result['created'] }} new, {{ $result['linked'] }} linked, {{ $result['updated'] }} updated @if (count($result['skipped']))· {{ count($result['skipped']) }} skipped (no e-mail)@endif · {{ $when(\Illuminate\Support\Carbon::parse($step['status']['finished_at'])) }}</dd>@endif
+                            </dl>
+                            @if (($step['status']['state'] ?? null) === 'failed' && session('step') !== 'customers')
+                                <p class="flash error">{{ $step['status']['error'] }}</p>
+                            @endif
+                            @if ($step['busy'] && ($step['status']['state'] ?? null) === 'queued')
+                                <p class="muted">Waiting for the queue worker. Locally, run <code>php artisan queue:work redis --queue=orders,inventory,default</code>.</p>
+                            @endif
+                            @if ($step['without_woo'] > 0 && ! $step['busy'])
+                                <p class="muted">{{ $step['without_woo'] }} {{ Str::plural('customer', $step['without_woo']) }} not linked to a WooCommerce login yet. Until they are, they pay list price in the shop (their orders still get B2B prices in Fortnox if the e-mail matches). <a href="{{ route('customers.index', ['filter' => 'no-woo']) }}">Link them</a> with <em>Find in WooCommerce</em>.</p>
+                            @endif
+                            @unless ($step['busy'])
+                                <form method="post" action="{{ route('setup.customers.import') }}" class="actions">@csrf
+                                    <button @class(['secondary' => $step['state'] === 'done'])>{{ $result ? 'Import again' : 'Import customers from Fortnox' }}</button>
+                                    <a href="{{ route('customers.create') }}">or add one by hand</a>
+                                </form>
+                            @endunless
+                        @endif
+                        @break
+
+                    @case('tiers')
+                        <p>A tier is a discount off the list price, e.g. Reseller 20 %. Put each wholesale customer in one; the shop and Fortnox both use it.</p>
+                        <dl>
+                            <dt>Active tiers</dt><dd>{{ $step['tiers'] }}</dd>
+                            <dt>Customers in a tier</dt><dd>{{ $step['in_tier'] }} @if ($step['without_tier'] > 0)<span class="muted">· {{ $step['without_tier'] }} without (they pay list price)</span>@endif</dd>
+                        </dl>
+                        <div class="actions">
+                            @if ($step['tiers'] === 0)
+                                <a class="btn" href="{{ route('tiers.index') }}#new">Create a tier</a>
+                            @else
+                                <a class="btn @if ($step['state'] === 'done') secondary @endif" href="{{ route('customers.index', ['filter' => 'no-tier']) }}">Customers without a tier</a>
+                                <a href="{{ route('tiers.index') }}">Edit tiers</a>
+                            @endif
+                        </div>
                         @break
 
                     @case('token')

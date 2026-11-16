@@ -42,9 +42,27 @@ class ProductUpdatedHandler
         }
     }
 
-    private function record(array $product, string $sku): array
+    /**
+     * Create or update the SKU without asking for a stock sync (the catalogue import links the
+     * Fortnox article first). Null for products this app does not track.
+     */
+    public function save(array $product): ?ProductSku
     {
-        $productSku = DB::transaction(function () use ($product, $sku) {
+        $sku = trim((string) ($product['sku'] ?? ''));
+        if ($sku === '' || ($product['type'] ?? null) === 'variable') {
+            return null;
+        }
+
+        try {
+            return $this->upsert($product, $sku);
+        } catch (UniqueConstraintViolationException) {
+            return $this->upsert($product, $sku);
+        }
+    }
+
+    private function upsert(array $product, string $sku): ProductSku
+    {
+        return DB::transaction(function () use ($product, $sku) {
             $productSku = $this->findSku($product, $sku);
             $attributes = $this->attributesFrom($product, $sku);
 
@@ -54,6 +72,11 @@ class ProductUpdatedHandler
 
             return $productSku;
         });
+    }
+
+    private function record(array $product, string $sku): array
+    {
+        $productSku = $this->upsert($product, $sku);
 
         $result = $this->inventory->request($productSku, [
             'source' => 'webhook',

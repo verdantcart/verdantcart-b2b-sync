@@ -40,6 +40,15 @@ interface ErpAdapter
     public function pullCustomers(): iterable;
 
     /**
+     * All articles in the ERP, so products can be linked to them.
+     *
+     * @return iterable<ErpArticle>
+     *
+     * @throws ErpException
+     */
+    public function pullArticles(): iterable;
+
+    /**
      * Sellable stock per article, as the ERP sees it. Articles the ERP does not stock-manage
      * are left out; an empty result means "no ERP stock data, keep what you have".
      *

@@ -32,6 +32,9 @@ Route::middleware(HorizonBasicAuth::class)->prefix('setup')->name('setup')->cont
     Route::post('woo/webhooks', 'registerWebhooks')->name('.woo.webhooks');
     Route::post('fortnox/check', 'checkFortnox')->name('.fortnox.check');
     Route::post('buffer', 'saveBuffer')->name('.buffer');
+    Route::post('products/import', 'importProducts')->name('.products.import');
+    Route::post('products/link', 'linkProducts')->name('.products.link');
+    Route::post('customers/import', 'importCustomers')->name('.customers.import');
     Route::post('token', 'createToken')->name('.token');
 });
 

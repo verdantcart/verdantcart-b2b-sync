@@ -3,6 +3,7 @@
 namespace App\Erp\Fortnox;
 
 use App\Erp\ErpAdapter;
+use App\Erp\ErpArticle;
 use App\Erp\ErpCustomer;
 use App\Erp\ErpException;
 use App\Models\OrderLog;
@@ -116,6 +117,24 @@ class FortnoxAdapter implements ErpAdapter
                     countryCode: $c['CountryCode'] ?? null ?: null,
                     currency: $c['Currency'] ?? null ?: null,
                     active: (bool) ($c['Active'] ?? true),
+                );
+            }
+            $totalPages = (int) ($response['MetaInformation']['@TotalPages'] ?? 1);
+        } while ($page++ < $totalPages);
+    }
+
+    /** GET /3/articles, all pages. */
+    public function pullArticles(): iterable
+    {
+        $page = 1;
+        do {
+            $response = $this->client->get('articles', ['limit' => 500, 'page' => $page]);
+            foreach ($response['Articles'] ?? [] as $a) {
+                yield new ErpArticle(
+                    number: (string) $a['ArticleNumber'],
+                    description: (string) ($a['Description'] ?? ''),
+                    ean: ($a['EAN'] ?? null) ?: null,
+                    active: ! ($a['Expired'] ?? false),
                 );
             }
             $totalPages = (int) ($response['MetaInformation']['@TotalPages'] ?? 1);

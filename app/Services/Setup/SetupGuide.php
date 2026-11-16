@@ -5,6 +5,9 @@ namespace App\Services\Setup;
 use App\Erp\Fortnox\FortnoxClient;
 use App\Erp\Fortnox\LicenceCheck;
 use App\Models\AppSetting;
+use App\Models\B2bCustomer;
+use App\Models\B2bPriceTier;
+use App\Models\ProductSku;
 use App\Models\User;
 use App\Services\WooCommerce\WebhookRegistrar;
 use App\Services\WooCommerce\WooCommerceClient;
@@ -16,8 +19,8 @@ use Laravel\Sanctum\PersonalAccessToken;
 use Throwable;
 
 /**
- * The five steps that take a fresh installation to "orders and prices flow":
- * WooCommerce, webhooks, Fortnox, stock buffer, storefront token.
+ * The steps that take a fresh installation to "orders and prices flow": WooCommerce,
+ * webhooks, Fortnox, stock buffer, products, customers, price tiers, storefront token.
  *
  * Building the page only reads local state and the result of the last check.
  * WooCommerce and Fortnox are called only when the admin presses a check button.
@@ -45,7 +48,10 @@ class SetupGuide
             $this->wooStep(),
             $this->webhookStep(),
             $this->fortnoxStep(),
-            $this->bufferStep(),
+            $this->bufferStep(),      // before the products, so their first stock sync uses it
+            $this->productsStep(),
+            $this->customersStep(),
+            $this->tiersStep(),
             $this->tokenStep(),
         ];
     }
@@ -208,6 +214,77 @@ class SetupGuide
         ];
     }
 
+    private function productsStep(): array
+    {
+        $status = ImportStatus::get(ImportStatus::PRODUCTS);
+        $active = ProductSku::where('is_active', true);
+        $total = (clone $active)->count();
+        $unlinked = (clone $active)->whereNull('fortnox_article_number')->count();
+
+        $state = match (true) {
+            ($status['state'] ?? null) === ImportStatus::FAILED => self::PROBLEM,
+            ImportStatus::isBusy($status), $total === 0 => self::TODO,
+            $unlinked > 0 => self::PROBLEM,
+            default => self::DONE,
+        };
+
+        // The import lists unlinked products; drop the ones linked since.
+        $list = collect($status['result']['unlinked_list'] ?? []);
+        $stillUnlinked = $list->isEmpty() ? [] : ProductSku::whereIn('id', $list->pluck('id'))->whereNull('fortnox_article_number')->pluck('id')->all();
+
+        return [
+            'key' => 'products',
+            'title' => 'Bring in your products',
+            'state' => $state,
+            'status' => $status,
+            'busy' => ImportStatus::isBusy($status),
+            'ready' => $this->wooConfigured() && $this->erpReady(),
+            'total' => $total,
+            'unlinked' => $unlinked,
+            'unlinked_list' => $list->whereIn('id', $stillUnlinked)->values()->all(),
+        ];
+    }
+
+    private function customersStep(): array
+    {
+        $status = ImportStatus::get(ImportStatus::CUSTOMERS);
+        $linked = B2bCustomer::whereNotNull('fortnox_customer_number')->count();
+
+        $state = match (true) {
+            ($status['state'] ?? null) === ImportStatus::FAILED => self::PROBLEM,
+            ImportStatus::isBusy($status) => self::TODO,
+            ($status['state'] ?? null) === ImportStatus::DONE, $linked > 0 => self::DONE,
+            default => self::TODO,
+        };
+
+        return [
+            'key' => 'customers',
+            'title' => 'Bring in your customers',
+            'state' => $state,
+            'status' => $status,
+            'busy' => ImportStatus::isBusy($status),
+            'ready' => $this->erpReady(),
+            'total' => B2bCustomer::count(),
+            'linked' => $linked,
+            'without_woo' => B2bCustomer::where('is_active', true)->whereNull('woo_customer_id')->count(),
+        ];
+    }
+
+    private function tiersStep(): array
+    {
+        $tiers = B2bPriceTier::where('is_active', true)->count();
+        $inTier = B2bCustomer::where('is_active', true)->has('priceTiers')->count();
+
+        return [
+            'key' => 'tiers',
+            'title' => 'Set your price tiers',
+            'state' => $tiers > 0 && $inTier > 0 ? self::DONE : self::TODO,
+            'tiers' => $tiers,
+            'in_tier' => $inTier,
+            'without_tier' => B2bCustomer::where('is_active', true)->doesntHave('priceTiers')->count(),
+        ];
+    }
+
     private function tokenStep(): array
     {
         $tokens = $this->storefrontTokens();
@@ -223,6 +300,17 @@ class SetupGuide
     }
 
     // --- Helpers ---------------------------------------------------------------------------
+
+    /** The ERP can be asked for articles and customers: the fake ERP, or Fortnox logged in. */
+    private function erpReady(): bool
+    {
+        if (config('erp.driver') !== FortnoxClient::DRIVER) {
+            return true;
+        }
+        $fortnox = app(FortnoxClient::class);
+
+        return $fortnox->isConfigured() && $fortnox->connection() !== null;
+    }
 
     private function wooConfigured(): bool
     {
