@@ -82,9 +82,7 @@ class SetupGuide
             $result['missing_webhooks'] = (new WebhookRegistrar($woo))->missing(WebhookRegistrar::defaultUrl());
             $result['ok'] = true;
         } catch (WooCommerceException $e) {
-            $result['error'] = $e->status === 401
-                ? 'WooCommerce refused the API key. Check the consumer key and secret, and that the key has Read/Write access.'
-                : $e->getMessage();
+            $result['error'] = self::explainWooError($e);
         } catch (InvalidArgumentException $e) {
             $result['error'] = $e->getMessage();
         } catch (Throwable $e) {
@@ -94,6 +92,20 @@ class SetupGuide
         AppSetting::write(self::WOO_CHECK, $result);
 
         return $result;
+    }
+
+    /** A sentence a shop owner understands, with the technical detail kept short. */
+    public static function explainWooError(WooCommerceException $e): string
+    {
+        $store = (string) config('services.woocommerce.base_url');
+        $message = $e->getMessage();
+
+        return match (true) {
+            $e->status === 401 => 'WooCommerce refused the API key. Check the consumer key and secret, and that the key has Read/Write access.',
+            str_contains($message, 'cURL error 28') => "The shop at {$store} didn't answer within 8 seconds. If it was asleep, check again; if it keeps happening, check that the shop is online and that the VerdantCart B2B Prices plugin is version 0.2.1 or newer.",
+            str_contains($message, 'cURL error 6'), str_contains($message, 'cURL error 7') => "Could not reach {$store}. Check the address and that the shop is online.",
+            default => $message,
+        };
     }
 
     /** Calls Fortnox: company name plus one record of each resource we use. */

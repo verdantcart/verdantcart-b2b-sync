@@ -5,7 +5,7 @@ use VerdantCart\B2bPrices\Plugin;
 /**
  * Plugin Name:       VerdantCart B2B Prices
  * Description:       Shows each wholesale customer their own price in WooCommerce, using the same price rules VerdantCart B2B Sync uses for Fortnox orders.
- * Version:           0.2.0
+ * Version:           0.2.1
  * Requires at least: 6.4
  * Requires PHP:      8.1
  * Requires Plugins:  woocommerce
@@ -15,7 +15,7 @@ use VerdantCart\B2bPrices\Plugin;
  */
 defined('ABSPATH') || exit;
 
-const VCB2B_VERSION = '0.2.0';
+const VCB2B_VERSION = '0.2.1';
 
 require_once __DIR__.'/includes/ApiClient.php';
 require_once __DIR__.'/includes/PriceCache.php';

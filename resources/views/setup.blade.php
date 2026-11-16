@@ -5,7 +5,16 @@
 
 @push('styles')
 @if (collect($steps)->contains('busy', true))
-    <meta http-equiv="refresh" content="4">
+    {{-- An import is running: reload every 4 s while the page is visible, and at once when the
+         person comes back to it (browsers pause timers and meta refresh in hidden tabs). --}}
+    <script>
+        (function () {
+            var reload = function () { if (document.visibilityState === 'visible') { location.reload(); } };
+            setInterval(reload, 4000);
+            document.addEventListener('visibilitychange', reload);
+        })();
+    </script>
+    <noscript><meta http-equiv="refresh" content="4"></noscript>
 @endif
 <style>
         .link-table input { width:100%; min-width:120px; }
@@ -167,7 +176,7 @@
                             @php($result = $step['status']['result'] ?? null)
                             <dl>
                                 <dt>Products</dt><dd>{{ $step['total'] }} @if ($step['total'] > 0)({{ $step['total'] - $step['unlinked'] }} linked to Fortnox)@endif</dd>
-                                @if ($step['busy'])<dt>Now</dt><dd>{{ $step['status']['message'] ?? 'Working' }} …</dd>@endif
+                                @if ($step['busy'])<dt>Now</dt><dd>{{ $step['status']['message'] ?? 'Working' }} … <a href="{{ route('setup') }}#products">refresh</a></dd>@endif
                                 @if ($result)<dt>Last import</dt><dd>{{ $result['imported'] }} imported, {{ $result['linked'] }} newly linked · {{ $when(\Illuminate\Support\Carbon::parse($step['status']['finished_at'])) }}</dd>@endif
                             </dl>
                             @if (($step['status']['state'] ?? null) === 'failed' && session('step') !== 'products')
@@ -217,7 +226,7 @@
                             @php($result = $step['status']['result'] ?? null)
                             <dl>
                                 <dt>Customers</dt><dd>{{ $step['total'] }} ({{ $step['linked'] }} linked to Fortnox)</dd>
-                                @if ($step['busy'])<dt>Now</dt><dd>{{ $step['status']['message'] ?? 'Working' }} …</dd>@endif
+                                @if ($step['busy'])<dt>Now</dt><dd>{{ $step['status']['message'] ?? 'Working' }} … <a href="{{ route('setup') }}#customers">refresh</a></dd>@endif
                                 @if ($result)<dt>Last import</dt><dd>{{ $result['created'] }} new, {{ $result['linked'] }} linked, {{ $result['updated'] }} updated @if (count($result['skipped']))· {{ count($result['skipped']) }} skipped (no e-mail)@endif · {{ $when(\Illuminate\Support\Carbon::parse($step['status']['finished_at'])) }}</dd>@endif
                             </dl>
                             @if (($step['status']['state'] ?? null) === 'failed' && session('step') !== 'customers')

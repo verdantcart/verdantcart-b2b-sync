@@ -156,6 +156,18 @@ $tests = [
         check(WpFake::$requests === [], 'no request in any of these cases');
     },
 
+    'shop: the WooCommerce REST API never gets B2B prices, the Store API for block checkouts does' => function () {
+        check(Storefront::isShopContext(false, false, '/shop/coffee/') === true, 'product page');
+        check(Storefront::isShopContext(false, false, '/wp-json/wc/store/v1/cart') === true, 'Store API (block cart)');
+        check(Storefront::isShopContext(true, true, '/wp-admin/admin-ajax.php') === true, 'shop ajax');
+        check(Storefront::isShopContext(true, false, '/wp-admin/post.php?post=7') === false, 'wp-admin');
+        check(Storefront::isShopContext(false, false, '/wp-json/wc/v3/products?per_page=100') === false, 'REST API v3');
+        check(Storefront::isShopContext(false, false, '/wp-json/wc/v2/orders/5') === false, 'REST API v2');
+        check(Storefront::isShopContext(false, false, '/?rest_route=/wc/v3/products&oauth_consumer_key=ck') === false, 'REST API without pretty links');
+        check(Storefront::isShopContext(false, false, '/?rest_route=%2Fwc%2Fv3%2Fproducts') === false, 'REST API, encoded route');
+        check(Storefront::isShopContext(false, false, '/product/wc-v3-gift-card/') === true, 'a product slug that looks similar');
+    },
+
     'shop: a product B2B Sync does not know keeps the shop price' => function () {
         WpFake::respond(200, b2bAnswer([], ['LOCAL-ONLY']));
         $local = new FakeProduct(3, 'LOCAL-ONLY', '75.00');

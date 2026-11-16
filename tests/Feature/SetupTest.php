@@ -160,7 +160,7 @@ class SetupTest extends TestCase
     {
         Http::fake(fn () => throw new ConnectionException('cURL error 28: Operation timed out'));
 
-        $this->followingRedirects()->post('/setup/woo/check')->assertSee('Could not reach WooCommerce');
+        $this->followingRedirects()->post('/setup/woo/check')->assertSee("didn't answer within 8 seconds");
 
         Sleep::assertNeverSlept(); // no retry back-off while someone waits on the page
         $this->assertSame('problem', $this->stepState('woo'));

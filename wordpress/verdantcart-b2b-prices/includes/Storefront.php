@@ -33,8 +33,26 @@ final class Storefront
         return new self(
             $cache,
             static fn (): int => (int) get_current_user_id(),
-            static fn (): bool => ! is_admin() || wp_doing_ajax(),
+            static fn (): bool => self::isShopContext(is_admin(), wp_doing_ajax(), (string) ($_SERVER['REQUEST_URI'] ?? '')),
         );
+    }
+
+    /**
+     * B2B prices are for shoppers: shop pages, the cart and the checkout, including the Store API
+     * (wc/store) that block-based carts and checkouts use.
+     *
+     * Never in wp-admin, so editing an order keeps its stored prices, and never in the WooCommerce
+     * REST API (wc/v1–v3). That API is for integrations, B2B Sync among them, and logs the request
+     * in as the API key's user. Pricing it would ask B2B Sync for prices while B2B Sync is waiting
+     * for the answer: slow at best, a deadlock on a single-process local server.
+     */
+    public static function isShopContext(bool $isAdmin, bool $doingAjax, string $requestUri): bool
+    {
+        if ($isAdmin && ! $doingAjax) {
+            return false;
+        }
+
+        return ! preg_match('#(?:^|[/=])wc/v\d+(?:[/?&]|$)#', rawurldecode($requestUri));
     }
 
     public function register(): void
