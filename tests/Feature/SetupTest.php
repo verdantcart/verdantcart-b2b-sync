@@ -50,12 +50,17 @@ class SetupTest extends TestCase
         return collect($this->get('/setup')->assertOk()->viewData('steps'))->firstWhere('key', $key)['state'];
     }
 
-    private function fakeWoo(array $webhooks = []): void
+    private function fakeWoo(array $webhooks = [], string $pricesIncludeTax = 'no', string $calcTaxes = 'yes', int $taxStatus = 200): void
     {
         Http::preventStrayRequests();
         Http::fake([
             'shop.acme.test/wp-json/wc/v3/products*' => Http::response([], 200, ['X-WP-Total' => '42']),
-            'shop.acme.test/wp-json/wc/v3/settings/general*' => Http::response([['id' => 'woocommerce_currency', 'value' => 'SEK']]),
+            'shop.acme.test/wp-json/wc/v3/settings/general*' => Http::response([
+                ['id' => 'woocommerce_currency', 'value' => 'SEK'], ['id' => 'woocommerce_calc_taxes', 'value' => $calcTaxes],
+            ]),
+            'shop.acme.test/wp-json/wc/v3/settings/tax*' => $taxStatus === 200
+                ? Http::response([['id' => 'woocommerce_prices_include_tax', 'value' => $pricesIncludeTax]])
+                : Http::response(['code' => 'woocommerce_rest_cannot_view', 'message' => 'Sorry, you cannot list resources.'], $taxStatus),
             'shop.acme.test/wp-json/wc/v3/webhooks?*' => Http::response($webhooks),
             'shop.acme.test/wp-json/wc/v3/webhooks' => fn (Request $r) => Http::response(['id' => random_int(1, 999), 'status' => 'active'] + $r->data(), 201),
             'shop.acme.test/wp-json/wc/v3/webhooks/*' => fn (Request $r) => Http::response(['status' => 'active'] + $r->data()),
@@ -132,6 +137,27 @@ class SetupTest extends TestCase
     }
 
     // --- WooCommerce -----------------------------------------------------------------------
+
+    public function test_prices_entered_including_vat_stop_the_setup(): void
+    {
+        $this->fakeWoo(pricesIncludeTax: 'yes');
+
+        $this->followingRedirects()->post('/setup/woo/check')
+            ->assertSee('prices are entered including VAT')
+            ->assertSee('every order would be 25 % too high');
+        $this->assertSame('problem', $this->stepState('woo'));
+    }
+
+    public function test_unknown_tax_settings_and_no_vat_at_checkout_are_warnings_only(): void
+    {
+        $this->fakeWoo(calcTaxes: 'no', taxStatus: 403);
+
+        $this->followingRedirects()->post('/setup/woo/check')
+            ->assertSee('42 products, currency SEK')
+            ->assertSee("Could not read the shop's tax settings", false)
+            ->assertSee("WooCommerce doesn't add VAT at checkout", false);
+        $this->assertSame('done', $this->stepState('woo'));
+    }
 
     public function test_checking_woocommerce_remembers_the_store_and_which_webhooks_are_missing(): void
     {

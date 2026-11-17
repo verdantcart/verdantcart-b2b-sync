@@ -42,9 +42,14 @@ class SetupController extends Controller
     {
         $result = $this->guide->checkWoo();
 
-        return $result['ok']
-            ? $this->back('woo', 'status', "WooCommerce answered: {$result['products']} products, currency ".($result['currency'] ?? '?').'.')
-            : $this->back('woo', 'error', $result['error']);
+        if (! $result['ok']) {
+            return $this->back('woo', 'error', $result['error']);
+        }
+        if ($result['prices_include_tax'] === true) {
+            return $this->back('woo', 'error', 'WooCommerce answered, but its prices are entered including VAT. See below.');
+        }
+
+        return $this->back('woo', 'status', "WooCommerce answered: {$result['products']} products, currency ".($result['currency'] ?? '?').'.');
     }
 
     public function registerWebhooks(): RedirectResponse

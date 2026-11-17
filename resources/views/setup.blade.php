@@ -80,11 +80,23 @@
                                 @if ($step['check'] && $step['check']['ok'])
                                     <dt>Products</dt><dd>{{ $step['check']['products'] }}</dd>
                                     <dt>Currency</dt><dd>{{ $step['check']['currency'] ?? '?' }}</dd>
+                                    <dt>Prices</dt><dd>{{ match ($step['check']['prices_include_tax'] ?? null) { false => 'excluding VAT ✓', true => 'including VAT ✕', default => 'VAT setting unknown' } }}</dd>
                                 @endif
                                 @if ($step['check'])<dt>Checked</dt><dd>{{ $when($step['check']['checked_at']) }}</dd>@endif
                             </dl>
                             @if ($step['check'] && ! $step['check']['ok'] && session('step') !== 'woo')
                                 <p class="flash error">{{ $step['check']['error'] }}</p>
+                            @endif
+                            @if ($step['check'] && $step['check']['ok'])
+                                @php($vat = $step['check'])
+                                @if (($vat['prices_include_tax'] ?? null) === true)
+                                    <p class="flash error"><strong>Prices are entered including VAT.</strong> B2B Sync sends prices to Fortnox excluding VAT, so every order would be 25 % too high. In WooCommerce → Settings → Tax, set <em>Prices entered with tax</em> to <em>No, I will enter prices exclusive of tax</em>, then check again. This also changes the price consumers see, so plan it with the shop owner.</p>
+                                @elseif (($vat['prices_include_tax'] ?? null) === null)
+                                    <p class="flash error" style="background:#fef0e1;color:var(--amber)">Could not read the shop's tax settings. Make sure prices are entered <strong>excluding VAT</strong> (WooCommerce → Settings → Tax): Fortnox gets them as excluding VAT.</p>
+                                @endif
+                                @if (($vat['calc_taxes'] ?? null) === false)
+                                    <p class="flash error" style="background:#fef0e1;color:var(--amber)">WooCommerce doesn't add VAT at checkout, so customers pay the price without VAT while the Fortnox order adds it. Fine if you invoice from Fortnox; otherwise turn on <em>Enable tax rates and calculations</em> in WooCommerce → Settings → General.</p>
+                                @endif
                             @endif
                             <form method="post" action="{{ route('setup.woo.check') }}" class="actions">@csrf
                                 <button>{{ $step['check'] ? 'Check again' : 'Check the connection' }}</button>

@@ -26,12 +26,12 @@ class FortnoxAdapter implements ErpAdapter
     {
         $customerNumber = $order->customer?->fortnox_customer_number;
         if (! $customerNumber) {
-            throw new ErpException('Order customer is not linked to a Fortnox customer number. Run `php artisan erp:pull-customers` or set it on the customer.');
+            throw new ErpException('The customer is not linked to a Fortnox customer. Set the Fortnox customer number on their customer page, or import customers on the setup page, then retry.');
         }
 
         $rows = collect($order->priced_lines ?? [])->map(function (array $line) {
             if (empty($line['fortnox_article_number'])) {
-                throw new ErpException("SKU {$line['sku']} has no Fortnox article number.");
+                throw new ErpException("SKU {$line['sku']} has no Fortnox article number. Link it on the setup page (Bring in your products), then retry.");
             }
 
             return [

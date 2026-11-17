@@ -79,6 +79,11 @@ Adding another ERP (Visma, Business Central …) means one new class implementin
 
 Laravel 13 · PHP 8.3+ · PostgreSQL 16 · Redis 7 + Laravel Horizon · Sanctum · PHPUnit (131 tests, run on SQLite and Postgres in CI) · Docker on Fly.io · Sentry · structured JSON logs
 
+## Guides
+
+- **[Getting started](docs/getting-started.md):** for the shop: from a new installation to the first wholesale order in Fortnox, and day-to-day use.
+- **[Operations](docs/operations.md):** for whoever runs the installations: new customers, updates, monitoring, troubleshooting.
+
 ## Running it locally
 
 Requirements: PHP 8.3+ with `pdo_pgsql`, Composer 2, PostgreSQL 16 and Redis 7 (via `docker compose up -d`, or Laragon on Windows).
@@ -98,7 +103,9 @@ php artisan queue:work redis --queue=orders,inventory,default
 php artisan schedule:work            # retries + heartbeat
 ```
 
-On Linux/macOS you can run `php artisan horizon` instead of `queue:work`. Windows lacks the `pcntl` extension Horizon needs, but the dashboard at `/horizon` still works with `queue:work`.
+On Windows, `powershell -ExecutionPolicy Bypass -File scripts\local.ps1` starts all three: the server in the current window, the worker and the scheduler in their own. On Linux/macOS you can run `php artisan horizon` instead of `queue:work`. Windows lacks the `pcntl` extension Horizon needs, but the dashboard at `/horizon` still works with `queue:work`.
+
+Once it runs, open `/setup`: the [setup guide](#setup-guide) connects the store and Fortnox with buttons. The commands below do the same from the terminal.
 
 ### Connecting a store and an ERP
 

@@ -129,8 +129,8 @@ class CustomerController extends Controller
     }
 
     /**
-     * Look the customer up in WooCommerce by e-mail and offer the match.
-     * Short timeout and no retries: someone is waiting on the page.
+     * Look the customer up in WooCommerce by e-mail and link the match straight away (a separate
+     * Save step was missed in the Day 10 test run). Short timeout and no retries: someone is waiting.
      */
     public function findInWoo(B2bCustomer $customer): RedirectResponse
     {
@@ -151,7 +151,10 @@ class CustomerController extends Controller
             return back()->with('error', "WooCommerce customer {$match['id']} is already linked to {$taken->company_name}.");
         }
 
-        return back()->withInput(['woo_customer_id' => $match['id']])
-            ->with('status', "Found WooCommerce customer {$match['id']} (".trim(($match['first_name'] ?? '').' '.($match['last_name'] ?? '')).'). Press Save to link it.');
+        $customer->update(['woo_customer_id' => $match['id']]);
+        $name = trim(($match['first_name'] ?? '').' '.($match['last_name'] ?? ''));
+
+        return redirect()->route('customers.show', $customer)
+            ->with('status', "Linked to WooCommerce customer {$match['id']}".($name !== '' ? " ({$name})" : '').'. When they log in to the shop they see their B2B prices.');
     }
 }

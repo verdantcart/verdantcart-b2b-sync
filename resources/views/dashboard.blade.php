@@ -67,11 +67,15 @@
                             @if ($queue['heartbeat_at'])
                                 {{ $queue['heartbeat_at']->diffForHumans() }}
                             @else
-                                <span class="pill pending">never</span>
+                                <span class="pill pending">no heartbeat yet</span>
                             @endif
                         </dd>
                     </dl>
-                    <p class="muted" style="margin:8px 0 0">Check with <code>php artisan queue:heartbeat</code></p>
+                    @if ($queue['heartbeat_at'])
+                        <p class="muted" style="margin:8px 0 0">Check now with <code>php artisan queue:heartbeat</code></p>
+                    @else
+                        <p class="muted" style="margin:8px 0 0">The scheduler sends a heartbeat through the queue every 5 minutes. Locally it only runs when started: <code>scripts\local.ps1</code> starts it with the worker.</p>
+                    @endif
                 @else
                     <p class="muted" style="margin:0"><span class="pill failed">Redis unavailable</span> Start Redis in Laragon.</p>
                 @endif

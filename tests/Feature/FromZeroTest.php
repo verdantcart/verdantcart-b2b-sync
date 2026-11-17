@@ -66,7 +66,8 @@ class FromZeroTest extends TestCase
                 ['id' => 10, 'type' => 'simple', 'sku' => 'TEA-100', 'name' => 'Green tea', 'regular_price' => '200.00', 'status' => 'publish'],
                 ['id' => 11, 'type' => 'simple', 'sku' => 'VC-KAF-4735', 'name' => 'Coffee', 'regular_price' => '180.00', 'status' => 'publish'],
             ], 200, ['X-WP-Total' => '2', 'X-WP-TotalPages' => '1']),
-            $woo.'settings/general*' => Http::response([['id' => 'woocommerce_currency', 'value' => 'SEK']]),
+            $woo.'settings/general*' => Http::response([['id' => 'woocommerce_currency', 'value' => 'SEK'], ['id' => 'woocommerce_calc_taxes', 'value' => 'yes']]),
+            $woo.'settings/tax*' => Http::response([['id' => 'woocommerce_prices_include_tax', 'value' => 'no']]),
             $woo.'webhooks?*' => Http::response([]),
             $woo.'webhooks' => fn (Request $r) => Http::response(['id' => random_int(1, 999), 'status' => 'active'] + $r->data(), 201),
             $woo.'customers*' => Http::response([['id' => 3, 'first_name' => 'Sara', 'last_name' => 'Lind', 'email' => 'sara@nordictea.se']]),
@@ -127,9 +128,8 @@ class FromZeroTest extends TestCase
 
         // 7. A Gold tier, and the customer linked to their shop login and put in it.
         $this->post('/tiers', ['name' => 'Guld', 'discount_percent' => '10', 'priority' => 20, 'is_active' => '1']);
-        $this->from("/customers/{$customer->id}")->post("/customers/{$customer->id}/find-in-woo")->assertSessionHasInput('woo_customer_id', 3);
-        $this->put("/customers/{$customer->id}", $customer->only(['company_name', 'email', 'org_number', 'country_code', 'currency']) + ['woo_customer_id' => 3, 'fortnox_customer_number' => '1042', 'is_active' => '1'])
-            ->assertSessionHasNoErrors();
+        $this->post("/customers/{$customer->id}/find-in-woo")->assertSessionHas('status');
+        $this->assertSame(3, $customer->fresh()->woo_customer_id, 'linked without a separate Save');
         $this->post("/customers/{$customer->id}/tiers", ['tier_id' => B2bPriceTier::sole()->id]);
         $this->assertSame('done', $this->step('tiers'));
 

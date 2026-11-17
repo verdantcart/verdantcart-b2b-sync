@@ -7,6 +7,7 @@
         <h1>Customers</h1>
         <a class="btn" href="{{ route('customers.create') }}">New customer</a>
     </header>
+    <p class="muted" style="margin:-12px 0 16px">Open a customer to choose their price tier and link them to their WooCommerce login and Fortnox customer.</p>
 
     <form method="get" action="{{ route('customers.index') }}" class="card actions" style="margin-bottom:12px" role="search">
         <input type="search" name="q" value="{{ $search }}" placeholder="Company, e-mail, org. number, Woo ID or Fortnox no." aria-label="Search" style="flex:3 1 260px">
@@ -41,7 +42,7 @@
             @empty
                 <tr><td colspan="4" class="muted">
                     @if ($search !== '' || $filter !== '' || $tierSlug !== '') Nobody matches. <a href="{{ route('customers.index') }}">Show everyone</a>.
-                    @else No customers yet. <a href="{{ route('customers.create') }}">Add one</a>, or import them from Fortnox with <code>php artisan erp:pull-customers</code>.
+                    @else No customers yet. <a href="{{ route('setup') }}#customers">Import them from Fortnox</a> on the setup page, or <a href="{{ route('customers.create') }}">add one</a>.
                     @endif
                 </td></tr>
             @endforelse

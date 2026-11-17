@@ -10,8 +10,8 @@ variable-product price ranges, in the cart and at checkout, and WooCommerce char
 ## Install
 
 1. Copy this folder to `wp-content/plugins/verdantcart-b2b-prices/` and activate the plugin.
-2. In B2B Sync, create a token that can only read prices:
-   `php artisan api:token "Shop" --ability=prices:read`
+2. In B2B Sync, open **Setup → Connect the B2B Prices plugin** and press **Create the token**.
+   It can only read prices and is shown once. (From the terminal: `php artisan api:token "Shop" --ability=prices:read`.)
 3. In WordPress, go to **WooCommerce → B2B Prices** and enter the B2B Sync URL and the token.
    You can also put them in `wp-config.php` instead:
    ```php

@@ -83,7 +83,7 @@
                 @unless ($customer->woo_customer_id)
                     <form method="post" action="{{ route('customers.find-in-woo', $customer) }}" class="actions" style="margin-top:12px">@csrf
                         <button class="secondary">Find in WooCommerce</button>
-                        <span class="muted">Looks up {{ $customer->email }} and fills in the customer ID.</span>
+                        <span class="muted">Looks up {{ $customer->email }} in WooCommerce and links the customer it finds.</span>
                     </form>
                 @endunless
             </section>

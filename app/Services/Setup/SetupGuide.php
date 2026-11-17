@@ -72,13 +72,18 @@ class SetupGuide
     /** Calls WooCommerce: counts products, reads the currency, looks for our webhooks. */
     public function checkWoo(): array
     {
-        $result = ['ok' => false, 'error' => null, 'products' => null, 'currency' => null, 'missing_webhooks' => null, 'checked_at' => now()->toIso8601String()];
+        $result = [
+            'ok' => false, 'error' => null, 'products' => null, 'currency' => null, 'missing_webhooks' => null,
+            'calc_taxes' => null, 'prices_include_tax' => null, 'checked_at' => now()->toIso8601String(),
+        ];
 
         try {
             $woo = self::interactiveWoo();
             $result['products'] = $woo->total('products');
-            $currency = collect($woo->get('settings/general'))->firstWhere('id', 'woocommerce_currency');
-            $result['currency'] = $currency['value'] ?? null;
+            $general = collect($woo->get('settings/general'));
+            $result['currency'] = $general->firstWhere('id', 'woocommerce_currency')['value'] ?? null;
+            $result['calc_taxes'] = self::yesNo($general->firstWhere('id', 'woocommerce_calc_taxes')['value'] ?? null);
+            $result['prices_include_tax'] = self::pricesIncludeTax($woo);
             $result['missing_webhooks'] = (new WebhookRegistrar($woo))->missing(WebhookRegistrar::defaultUrl());
             $result['ok'] = true;
         } catch (WooCommerceException $e) {
@@ -92,6 +97,31 @@ class SetupGuide
         AppSetting::write(self::WOO_CHECK, $result);
 
         return $result;
+    }
+
+    /**
+     * Fortnox gets every order with VATIncluded = false, so WooCommerce prices must be entered
+     * excluding VAT. Null when the store doesn't say (older WooCommerce, or the key may not read
+     * tax settings); that is reported as unknown, never as a pass.
+     */
+    private static function pricesIncludeTax(WooCommerceClient $woo): ?bool
+    {
+        try {
+            $tax = collect($woo->get('settings/tax'));
+        } catch (WooCommerceException) {
+            return null;
+        }
+
+        return self::yesNo($tax->firstWhere('id', 'woocommerce_prices_include_tax')['value'] ?? null);
+    }
+
+    private static function yesNo(mixed $value): ?bool
+    {
+        return match ($value) {
+            'yes' => true,
+            'no' => false,
+            default => null,
+        };
     }
 
     /** A sentence a shop owner understands, with the technical detail kept short. */
@@ -151,8 +181,9 @@ class SetupGuide
         $state = match (true) {
             ! $configured => self::PROBLEM,
             $check === null => self::TODO,
-            $check['ok'] => self::DONE,
-            default => self::PROBLEM,
+            ! $check['ok'] => self::PROBLEM,
+            ($check['prices_include_tax'] ?? null) === true => self::PROBLEM, // Fortnox orders would be 25 % too high
+            default => self::DONE,
         };
 
         return [

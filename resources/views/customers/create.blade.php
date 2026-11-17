@@ -6,7 +6,7 @@
 @section('content')
     <header class="page">
         <h1><a href="{{ route('customers.index') }}" style="color:inherit;text-decoration:none">Customers</a> · New</h1>
-        <span class="muted">Customers already in Fortnox can be imported with <code>php artisan erp:pull-customers</code>.</span>
+        <span class="muted">Customers already in Fortnox are imported on the <a href="{{ route('setup') }}#customers">setup page</a>.</span>
     </header>
     <section class="card">
         <form method="post" action="{{ route('customers.store') }}" class="fields">@csrf

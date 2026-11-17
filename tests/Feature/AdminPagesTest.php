@@ -221,7 +221,7 @@ class AdminPagesTest extends TestCase
 
     // --- Find in WooCommerce ---------------------------------------------------------------
 
-    public function test_find_in_woocommerce_fills_in_the_customer_id(): void
+    public function test_find_in_woocommerce_links_the_customer_at_once(): void
     {
         config(['services.woocommerce.base_url' => 'https://shop.acme.test', 'services.woocommerce.consumer_key' => 'ck', 'services.woocommerce.consumer_secret' => 'cs']);
         $this->app->forgetInstance(WooCommerceClient::class);
@@ -229,12 +229,25 @@ class AdminPagesTest extends TestCase
         Http::fake(['shop.acme.test/wp-json/wc/v3/customers*' => Http::response([['id' => 77, 'first_name' => 'Sara', 'last_name' => 'Lind']])]);
         $customer = B2bCustomer::factory()->create(['email' => 'sara@acme.se', 'woo_customer_id' => null]);
 
-        $this->from("/customers/{$customer->id}")->post("/customers/{$customer->id}/find-in-woo")
-            ->assertSessionHasInput('woo_customer_id', 77)
-            ->assertSessionHas('status', 'Found WooCommerce customer 77 (Sara Lind). Press Save to link it.');
+        $this->post("/customers/{$customer->id}/find-in-woo")
+            ->assertRedirect("/customers/{$customer->id}")
+            ->assertSessionHas('status', fn (string $s) => str_starts_with($s, 'Linked to WooCommerce customer 77 (Sara Lind).'));
 
         Http::assertSent(fn ($r) => str_contains($r->url(), 'email=sara%40acme.se'));
-        $this->assertNull($customer->fresh()->woo_customer_id, 'nothing is linked until Save');
+        $this->assertSame(77, $customer->fresh()->woo_customer_id, 'no separate Save needed');
+    }
+
+    public function test_find_in_woocommerce_never_steals_a_link(): void
+    {
+        config(['services.woocommerce.base_url' => 'https://shop.acme.test', 'services.woocommerce.consumer_key' => 'ck', 'services.woocommerce.consumer_secret' => 'cs']);
+        $this->app->forgetInstance(WooCommerceClient::class);
+        Http::fake(['*' => Http::response([['id' => 77]])]);
+        B2bCustomer::factory()->create(['company_name' => 'First AB', 'woo_customer_id' => 77]);
+        $second = B2bCustomer::factory()->create(['woo_customer_id' => null]);
+
+        $this->from("/customers/{$second->id}")->post("/customers/{$second->id}/find-in-woo")
+            ->assertSessionHas('error', 'WooCommerce customer 77 is already linked to First AB.');
+        $this->assertNull($second->fresh()->woo_customer_id);
     }
 
     public function test_find_in_woocommerce_explains_when_nobody_matches(): void

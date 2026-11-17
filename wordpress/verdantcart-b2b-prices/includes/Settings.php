@@ -175,7 +175,7 @@ final class Settings
                             <?php } else { ?>
                                 <input type="password" id="vcb2b-api-token" name="api_token" class="regular-text" autocomplete="new-password"
                                        placeholder="<?php echo $hasToken ? esc_attr('Saved. Leave empty to keep it.') : ''; ?>">
-                                <p class="description">Create one in B2B Sync: <code>php artisan api:token "Shop" --ability=prices:read</code></p>
+                                <p class="description">Create it in B2B Sync: <strong>Setup → Connect the B2B Prices plugin → Create the token</strong>. It is shown once; paste it here right away.</p>
                             <?php } ?>
                         </td>
                     </tr>
