@@ -4,7 +4,7 @@ Shows each wholesale customer their own price in WooCommerce. Prices come from
 [VerdantCart B2B Sync](../../README.md), so the price in the shop is the same price that
 ends up on the Fortnox order. Everyone else keeps seeing the normal shop price.
 
-**Status:** v0.2. B2B customers see their price on product pages, in shop listings, in
+**Status:** v1.0. B2B customers see their price on product pages, in shop listings, in
 variable-product price ranges, in the cart and at checkout, and WooCommerce charges it.
 
 ## Install

@@ -7,7 +7,15 @@
 
 > WooCommerce ↔ Fortnox middleware for Nordic B2B wholesale brands. Customer-tier pricing, buffered stock and automatic order transfer, so nobody re-types web orders into the ERP.
 
-**Live demo:** <https://verdantcart-b2b-sync.fly.dev> (synthetic data; the demo uses the built-in fake ERP)
+**Version 1.0** · [Getting started](docs/getting-started.md) · [Operations](docs/operations.md) · [Changelog](CHANGELOG.md)
+
+| A wholesale customer sees their own price in the shop |
+|---|
+| ![Shop prices: the list price crossed out and the customer's B2B price marked Your price](docs/screenshots/shop-prices.png) |
+
+| Setup guide: a new installation connected with buttons | Customer page: tier, links and what they pay |
+|---|---|
+| ![Setup page with the WooCommerce, webhook and Fortnox steps done](docs/screenshots/setup.png) | ![Customer page with the Guld tier, WooCommerce and Fortnox links, and the customer's prices](docs/screenshots/customer.png) |
 
 ---
 
@@ -77,7 +85,7 @@ Adding another ERP (Visma, Business Central …) means one new class implementin
 
 ## Tech stack
 
-Laravel 13 · PHP 8.3+ · PostgreSQL 16 · Redis 7 + Laravel Horizon · Sanctum · PHPUnit (131 tests, run on SQLite and Postgres in CI) · Docker on Fly.io · Sentry · structured JSON logs
+Laravel 13 · PHP 8.3+ · PostgreSQL 16 · Redis 7 + Laravel Horizon · Sanctum · PHPUnit (200+ tests, run on SQLite and Postgres in CI) · Docker on Fly.io · Sentry · structured JSON logs
 
 ## Guides
 
@@ -239,7 +247,11 @@ Interested? **support@verdantcart.ai**
 
 ## Status
 
-v0.1, built in a 15-day sprint (Oct–Nov 2026). Planned next: price lists per SKU (fixed prices on top of tier discounts), Fortnox customer creation from Woo, more ERP adapters.
+**v1.0** (November 2026): ready for a first customer. Built in a 15-day sprint (Oct–Nov 2026) and a 12-day hardening plan: prices in the shop, alerts, one installation per customer, the setup guide, and a full test from an empty installation to an order in a Fortnox sandbox. See the [changelog](CHANGELOG.md).
+
+Known limits are listed in the [operations guide](docs/operations.md#known-limits); the main ones: prices must be entered excluding VAT, and one shop and one Fortnox company per installation.
+
+Planned next: price lists per SKU (fixed prices on top of tier discounts), linking new products to Fortnox articles automatically, prices entered including VAT, Fortnox customer creation from Woo, more ERP adapters.
 
 ## License
 
