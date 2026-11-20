@@ -141,7 +141,7 @@ class FortnoxAdapterTest extends TestCase
         Http::fake(['apps.fortnox.se/oauth-v1/token' => Http::response(['error' => 'invalid_grant', 'error_description' => 'Invalid refresh token'], 400)]);
 
         $this->expectException(ErpException::class);
-        $this->expectExceptionMessage('reconnect at /fortnox/connect');
+        $this->expectExceptionMessage('log in to Fortnox again on the setup page');
 
         app(FortnoxClient::class)->get('customers');
     }

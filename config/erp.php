@@ -15,6 +15,12 @@ return [
         'auth_url' => 'https://apps.fortnox.se/oauth-v1/auth',
         'token_url' => 'https://apps.fortnox.se/oauth-v1/token',
         'api_url' => env('FORTNOX_API_URL', 'https://api.fortnox.se/3'),
+
+        // Real-time events (php artisan fortnox:listen). Topics need the matching scope.
+        'events' => [
+            'url' => env('FORTNOX_EVENTS_URL', 'wss://ws.fortnox.se/topics-v1'),
+            'topics' => env('FORTNOX_EVENT_TOPICS', 'articles'),
+        ],
         'timeout' => (int) env('FORTNOX_TIMEOUT', 20),
     ],
 

@@ -122,7 +122,14 @@ class FortnoxClient
         }
     }
 
-    private function accessToken(): string
+    /** The integration's client secret; the event stream sends it with the access token. */
+    public function clientSecret(): string
+    {
+        return (string) ($this->config['client_secret'] ?? '');
+    }
+
+    /** A valid access token, refreshed first if it expires within a minute. */
+    public function accessToken(): string
     {
         $connection = $this->connection();
         if ($connection === null) {
@@ -182,7 +189,7 @@ class FortnoxClient
         if ($response->failed() || empty($response['access_token'])) {
             $reason = $response['error_description'] ?? $response['error'] ?? 'HTTP '.$response->status();
             $hint = ($response['error'] ?? null) === 'invalid_grant'
-                ? ' The Fortnox login has expired or was revoked; reconnect at /fortnox/connect.'
+                ? ' The Fortnox login has expired or was revoked: log in to Fortnox again on the setup page (step 3).'
                 : '';
 
             throw new ErpException("Fortnox token request failed: {$reason}.{$hint}", retryable: $response->serverError(), status: $response->status());
